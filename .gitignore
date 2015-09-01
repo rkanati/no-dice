@@ -1,0 +1,8 @@
+Makefile
+debug/
+obj/
+release/
+*.make
+*.swp
+*~
+
