@@ -8,7 +8,7 @@ project "toodee"
 
   files { "src/**.hpp", "src/**.cpp" }
 
-  links { "xcb", "X11-xcb", "X11" }
+  links { "xcb", "X11-xcb", "X11", "GL", "EGL" }
 
   filter "configurations:debug"
     defines { "DEBUG" }

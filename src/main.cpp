@@ -10,6 +10,8 @@
 #include <xcb/xcb_event.h>
 #include <X11/Xlib-xcb.h>
 
+#include <GL/gl.h>
+
 using u32 = uint32_t;
 
 template <typename value_t, typename func_t>
@@ -74,7 +76,12 @@ x11_objects_t setup_x (int win_width, int win_height) {
 
   const u32 attr_mask = XCB_CW_EVENT_MASK;
   const u32 attr_list[] = {
-    XCB_EVENT_MASK_EXPOSURE
+    XCB_EVENT_MASK_BUTTON_PRESS
+    | XCB_EVENT_MASK_BUTTON_RELEASE
+    | XCB_EVENT_MASK_POINTER_MOTION
+    | XCB_EVENT_MASK_BUTTON_MOTION
+    | XCB_EVENT_MASK_KEY_PRESS
+    | XCB_EVENT_MASK_KEY_RELEASE
   };
 
   xcb_window_t win = xcb_generate_id (conn);
@@ -123,27 +130,128 @@ x11_objects_t setup_x (int win_width, int win_height) {
   return x11_objects_t { disp, conn, win, wm_delete_atom };
 }
 
+class gl_objects_t {
+public:
+  EGLDisplay egl_display;
+  EGLContext egl_context;
+  EGLSurface egl_surface;
+};
+
+gl_objects_t setup_gl (x11_objects_t& x11) {
+  auto ok = eglBindAPI (EGL_OPENGL_API);
+  if (!ok)
+    throw std::runtime_error ("eglBindAPI failed");
+
+  auto egl_disp = eglGetDisplay (x11.xlib_display);
+  if (egl_disp == EGL_NO_DISPLAY)
+    throw std::runtime_error ("eglGetDisplay failed");
+
+  int dummy;
+  ok = eglInitialize (egl_disp, &dummy, &dummy);
+  if (!ok)
+    throw std::runtime_error ("eglInitialize failed");
+
+  static const int config_attrs[] = {
+    EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
+    EGL_BUFFER_SIZE,       32,
+    EGL_DEPTH_SIZE,        24,
+    EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
+    EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
+    EGL_NONE
+  };
+
+  EGLConfig config;
+  int config_count = 0;
+  ok = eglChooseConfig (egl_disp, config_attrs, &config, 1, &config_count);
+  if (!ok || config_count == 0)
+    throw std::runtime_error ("eglChooseConfig failed");
+
+  static const int context_attrs[] = {
+    EGL_NONE
+  };
+
+  auto egl_ctx = eglCreateContext (egl_disp, config, EGL_NO_CONTEXT, context_attrs);
+  if (!egl_ctx)
+    throw std::runtime_error ("eglCreateContext failed");
+
+  static const int surf_attrs[] = {
+    EGL_RENDER_BUFFER, EGL_BACK_BUFFER,
+    EGL_NONE
+  };
+
+  auto egl_surf = eglCreateWindowSurface (egl_disp, config, x11.window, surf_attrs);
+  if (!egl_surf)
+    throw std::runtime_error ("eglCreateWindowSurface failed");
+
+  ok = eglMakeCurrent (egl_disp, egl_surf, egl_surf, egl_ctx);
+  if (!ok)
+    throw std::runtime_error ("eglMakeCurrent failed");
+
+  return gl_objects_t { egl_disp, egl_ctx, egl_surf };
+}
+
+void redraw (int width, int height) {
+  glViewport (0, 0, width, height);
+
+  glClearColor (0, 0, 0, 0);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  float r = float (width) / float (height);
+  printf ("ratio: %f\n", r);
+  glOrtho (-r, r, -1, 1, -1, 1);
+
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity ();
+
+  glColor3f (1, 0, 0);
+  glBegin (GL_QUADS);
+    glVertex3f (-0.1, -0.1, 1);
+    glVertex3f ( 0.1, -0.1, 1);
+    glVertex3f ( 0.1,  0.1, 1);
+    glVertex3f (-0.1,  0.1, 1);
+  glEnd ();
+}
+
 int main () {
+  xcb_generic_error_t* xcb_err = nullptr;
+
   x11_objects_t x11 = setup_x (800, 600);
   xcb_flush (x11.xcb_connection);
 
+  gl_objects_t gl = setup_gl (x11);
+
+  int width = 1024,
+      height = 768;
+
   xcb_generic_event_t* ev;
-  while ((ev = xcb_wait_for_event (x11.xcb_connection))) {
-    switch (XCB_EVENT_RESPONSE_TYPE (ev)) {
-      case XCB_EXPOSE:
-        printf ("oh my\n");
-        break;
-      case XCB_CLIENT_MESSAGE: {
-        auto cmev = (xcb_client_message_event_t*) ev;
-        auto msg = cmev->data.data32[0];
-        if (msg == x11.wm_delete_atom) {
-          free (ev);
-          goto exit_loop;
+  while (true) {
+    while ((ev = xcb_poll_for_event (x11.xcb_connection))) {
+      switch (XCB_EVENT_RESPONSE_TYPE (ev)) {
+        case XCB_CLIENT_MESSAGE: {
+          auto cmev = (xcb_client_message_event_t*) ev;
+          auto msg = cmev->data.data32[0];
+          if (msg == x11.wm_delete_atom) {
+            free (ev);
+            goto exit_loop;
+          }
         }
+        default:;
       }
-      default:;
+      free (ev);
     }
-    free (ev);
+
+    auto get_geom_cookie = xcb_get_geometry (x11.xcb_connection, x11.window);
+    auto* geom = xcb_get_geometry_reply (x11.xcb_connection, get_geom_cookie, &xcb_err);
+    if (geom) {
+      width = geom->width;
+      height = geom->height;
+      free (geom);
+    }
+
+    redraw (width, height);
+    eglSwapBuffers (gl.egl_display, gl.egl_surface);
   }
 
 exit_loop:;
