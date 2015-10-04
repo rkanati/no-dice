@@ -190,7 +190,7 @@ gl_objects_t setup_gl (x11_objects_t& x11) {
   return gl_objects_t { egl_disp, egl_ctx, egl_surf };
 }
 
-void redraw (int width, int height) {
+void redraw (int width, int height, float t) {
   glViewport (0, 0, width, height);
 
   glClearColor (0, 0, 0, 0);
@@ -199,19 +199,60 @@ void redraw (int width, int height) {
   glMatrixMode (GL_PROJECTION);
   glLoadIdentity ();
   float r = float (width) / float (height);
-  printf ("ratio: %f\n", r);
-  glOrtho (-r, r, -1, 1, -1, 1);
+  float s = 5.0f;
+  float x = r * s;
+  float y = s;
+  glOrtho (-x, x, -y, y, -10, 10);
 
   glMatrixMode (GL_MODELVIEW);
   glLoadIdentity ();
+  glTranslatef (1, 0, 0);
+  glRotatef (t * 100.0f, 0.5773f, 0.5773f, 0.5773f);
 
-  glColor3f (1, 0, 0);
+  float ch = 0.8, cm = 0.4, cl = 0.1;
   glBegin (GL_QUADS);
-    glVertex3f (-0.1, -0.1, 1);
-    glVertex3f ( 0.1, -0.1, 1);
-    glVertex3f ( 0.1,  0.1, 1);
-    glVertex3f (-0.1,  0.1, 1);
+    glColor3f (ch, cm, cm);
+    glVertex3f (1, -1, -1);
+    glVertex3f (1,  1, -1);
+    glVertex3f (1,  1,  1);
+    glVertex3f (1, -1,  1);
+
+    glColor3f (cm, cl, cl);
+    glVertex3f (-1, -1, -1);
+    glVertex3f (-1, -1,  1);
+    glVertex3f (-1,  1,  1);
+    glVertex3f (-1,  1, -1);
+
+    glColor3f (cm, ch, cm);
+    glVertex3f (-1, 1, -1);
+    glVertex3f (-1, 1,  1);
+    glVertex3f ( 1, 1,  1);
+    glVertex3f ( 1, 1, -1);
+
+    glColor3f (cl, cm, cl);
+    glVertex3f (-1, -1, -1);
+    glVertex3f ( 1, -1, -1);
+    glVertex3f ( 1, -1,  1);
+    glVertex3f (-1, -1,  1);
+
+    glColor3f (cm, cm, ch);
+    glVertex3f (-1, -1, 1);
+    glVertex3f ( 1, -1, 1);
+    glVertex3f ( 1,  1, 1);
+    glVertex3f (-1,  1, 1);
+
+    glColor3f (cl, cl, cm);
+    glVertex3f (-1, -1, -1);
+    glVertex3f (-1,  1, -1);
+    glVertex3f ( 1,  1, -1);
+    glVertex3f ( 1, -1, -1);
   glEnd ();
+}
+
+float now () {
+  timespec ts = { 0 };
+  clock_gettime (CLOCK_MONOTONIC_RAW, &ts);
+  return float (ts.tv_sec) + float (ts.tv_nsec / 1000ll) * 0.000001f;
 }
 
 int main () {
@@ -222,11 +263,21 @@ int main () {
 
   gl_objects_t gl = setup_gl (x11);
 
+  glEnable (GL_DEPTH_TEST);
+
   int width = 1024,
       height = 768;
 
-  xcb_generic_event_t* ev;
+  const float tick_hz = 50.0f;
+  const float dt = 1.0f / tick_hz;
+
+  float t = 0.0f;
+  float accum_time = 0.0f;
+  float prev_rt = now ();
+
   while (true) {
+    // handle events
+    xcb_generic_event_t* ev;
     while ((ev = xcb_poll_for_event (x11.xcb_connection))) {
       switch (XCB_EVENT_RESPONSE_TYPE (ev)) {
         case XCB_CLIENT_MESSAGE: {
@@ -250,7 +301,17 @@ int main () {
       free (geom);
     }
 
-    redraw (width, height);
+    float cur_rt = now ();
+    float diff_rt = cur_rt - prev_rt;
+    accum_time += diff_rt;
+    prev_rt = cur_rt;
+
+    while (accum_time >= dt) {
+      accum_time -= dt;
+      t += dt;
+    }
+
+    redraw (width, height, t + accum_time);
     eglSwapBuffers (gl.egl_display, gl.egl_surface);
   }
 
