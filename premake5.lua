@@ -1,7 +1,7 @@
-workspace "toodee"
+workspace "no-dice"
   configurations { "debug", "release" }
 
-project "toodee"
+project "no-dice"
   kind "ConsoleApp"
   language "C++"
   targetdir "%{cfg.buildcfg}/bin"
