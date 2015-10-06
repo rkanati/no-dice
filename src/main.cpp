@@ -75,11 +75,51 @@ namespace nd {
     glEnd ();
   }
 
-  float now () {
-    timespec ts = { 0 };
-    clock_gettime (CLOCK_MONOTONIC_RAW, &ts);
-    return double (ts.tv_sec) + ts.tv_nsec * 0.000000001;
-  }
+  class Syncer {
+    double prev_real_time;
+    double game_time;
+    double accumulator;
+
+    static double now () {
+      timespec ts = { 0 };
+      clock_gettime (CLOCK_MONOTONIC_RAW, &ts);
+      return double (ts.tv_sec) + ts.tv_nsec * 0.000000001;
+    }
+
+  public:
+    const double tick_hz = 50.0;
+    const double time_step = 1.0 / tick_hz;
+
+    Syncer () :
+      prev_real_time (now ()),
+      game_time      (0.0),
+      accumulator    (0.0)
+    { }
+
+    void update () {
+      double real_time = now ();
+      accumulator += real_time - prev_real_time;
+      prev_real_time = real_time;
+    }
+
+    bool need_tick () const {
+      return accumulator >= time_step;
+    }
+
+    void begin_tick () {
+      accumulator -= time_step;
+      game_time   += time_step;
+    }
+
+    double time () const {
+      return game_time;
+    }
+
+    float alpha () const {
+      return accumulator * tick_hz;
+    }
+
+  };
 
   extern "C" int main () {
     auto host = XHost::create ();
@@ -87,12 +127,7 @@ namespace nd {
 
     glEnable (GL_DEPTH_TEST);
 
-    const float tick_hz = 50.0f;
-    const float dt = 1.0f / tick_hz;
-
-    float t = 0.0f;
-    float accum_time = 0.0f;
-    float prev_rt = now ();
+    Syncer syncer;
 
     while (true) {
       // handle events
@@ -100,17 +135,13 @@ namespace nd {
       if (input.quit)
         break;
 
-      float cur_rt = now ();
-      float diff_rt = cur_rt - prev_rt;
-      accum_time += diff_rt;
-      prev_rt = cur_rt;
-
-      while (accum_time >= dt) {
-        accum_time -= dt;
-        t += dt;
+      syncer.update ();
+      while (syncer.need_tick ()) {
+        syncer.begin_tick ();
+        // ...
       }
 
-      redraw (host.width (), host.height (), t + accum_time);
+      redraw (host.width (), host.height (), syncer.time () + syncer.time_step * syncer.alpha ());
       gl_ctx.flip ();
     }
 
