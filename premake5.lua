@@ -8,7 +8,7 @@ project "no-dice"
 
   files { "src/**.hpp", "src/**.cpp" }
 
-  links { "xcb", "X11-xcb", "X11", "GL", "EGL" }
+  links { "xcb", "X11-xcb", "X11", "GL", "GLU", "EGL" }
 
   filter "configurations:debug"
     defines { "DEBUG" }
