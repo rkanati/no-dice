@@ -7,96 +7,38 @@
 
 #include "types.hpp"
 
+#include "frame.hpp"
 #include "chunk.hpp"
 #include "chunk-mesh.hpp"
+#include "stage.hpp"
+#include "syncer.hpp"
+#include "stage-chunk.hpp"
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <cassert>
 
+#include <iostream>
 #include <stdexcept>
+#include <memory>
 #include <vector>
+#include <array>
 
 #include <GL/gl.h>
 #include <GL/glu.h>
 
 namespace nd {
-  class Syncer {
-    double prev_real_time;
-    double game_time;
-    double accumulator;
-
-    static double now () {
-      timespec ts = { 0 };
-      clock_gettime (CLOCK_MONOTONIC_RAW, &ts);
-      return double (ts.tv_sec) + ts.tv_nsec * 0.000000001;
-    }
-
-  public:
-    const double tick_hz = 50.0;
-    const double time_step = 1.0 / tick_hz;
-
-    Syncer () :
-      prev_real_time (now ()),
-      game_time      (0.0),
-      accumulator    (0.0)
-    { }
-
-    void update () {
-      double real_time = now ();
-      accumulator += real_time - prev_real_time;
-      prev_real_time = real_time;
-    }
-
-    bool need_tick () const {
-      return accumulator >= time_step;
-    }
-
-    void begin_tick () {
-      accumulator -= time_step;
-      game_time   += time_step;
-    }
-
-    double time () const {
-      return game_time;
-    }
-
-    float alpha () const {
-      return accumulator * tick_hz;
-    }
-
-  };
-
-  void redraw (int width, int height, float t, const ChunkMesh& mesh) {
-    if (width < 1) width = 1;
-    if (height < 1) height = 1;
-
-    glViewport (0, 0, width, height);
-
-    glClearColor (0, 0, 0, 0);
-    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glMatrixMode (GL_PROJECTION);
-    glLoadIdentity ();
-    double aspect = double (width) / double (height);
-    gluPerspective (75.0 / aspect, aspect, 0.1, 100.0);
-
-    glMatrixMode (GL_MODELVIEW);
-    glLoadIdentity ();
-    gluLookAt (
-      8, 8, -24,
-      8, 8, 8,
-      0, 1, 0
-    );
-
-    glRotatef (t * 100.0f, 0.5773f, 0.5773f, 0.5773f);
-
-    mesh.draw ();
+  void configure_gl () {
+    glEnable (GL_CULL_FACE);
+    glEnable (GL_DEPTH_TEST);
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glEnableClientState (GL_COLOR_ARRAY);
   }
 
-  extern "C" int main () {
-    Chunk chunk;
+  auto make_test_chunkdata () -> ChunkData {
+    ChunkData chunk;
     for (int z = 0; z != 16; z++) {
       for (int y = 0; y != 16; y++) {
         for (int x = 0; x != 16; x++) {
@@ -108,8 +50,11 @@ namespace nd {
         }
       }
     }
+    return chunk;
+  }
 
-    Chunk blank;
+  auto make_blank_chunkdata () -> ChunkData {
+    ChunkData blank;
     for (int z = 0; z != 16; z++) {
       for (int y = 0; y != 16; y++) {
         for (int x = 0; x != 16; x++) {
@@ -117,42 +62,131 @@ namespace nd {
         }
       }
     }
+    return blank;
+  }
 
-    auto mesh = ChunkMesh::generate (chunk, blank, blank, blank);
+  auto get_cdata (vec3i pos) -> ChunkData {
+    static auto const test_cdata = make_test_chunkdata ();
+    static auto const blank_cdata = make_blank_chunkdata ();
 
+    if (pos == vec3i{0,0,0}) return test_cdata;
+    else return blank_cdata;
+  }
+
+  auto load_chunk (vec3i pos) -> StageChunk {
+    auto cdata = share (get_cdata (pos));
+    assert (!!cdata);
+    return StageChunk (std::move (cdata), pos);
+  }
+
+  bool get_adjacent_chunk_datas (
+    Array<3, ChunkData const*>& adjs,
+    Stage const& stage,
+    vec3i const pos)
+  {
+    static auto const offsets = Array<3, vec3i> {{ v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1} }};
+    for (auto i = 0; i != 3; i++) {
+      auto adj_chunk = stage.at_relative (pos + offsets[i]);
+      if (!adj_chunk) return false;
+
+      auto const adj_data = adj_chunk->data.get ();
+      if (!adj_data) return false;
+      else adjs[i] = adj_data;
+    }
+
+    return true;
+  }
+
+  template<typename OS, uint n, typename T>
+  OS& operator << (OS& os, Rk::vector<n, T> v) {
+    os << "( ";
+    for (auto x : v)
+      os << x << " ";
+    return os << ")";
+  }
+
+  extern "C" int main () try {
+    // subsystems
     auto host = XHost::create ();
     auto gl_ctx = GLContext::establish (host.egl_display (), host.egl_window ());
+    configure_gl ();
 
-    glEnable (GL_CULL_FACE);
-    glEnable (GL_DEPTH_TEST);
-    glEnableClientState (GL_VERTEX_ARRAY);
-    glEnableClientState (GL_COLOR_ARRAY);
-
+    // persistent state
     Syncer syncer;
 
+    Stage stage (3);
+    vec3i player_pos {0,0,0};
+
+    // transient state
+    std::vector<vec3i> required_chunks;
+    Frame frame;
+
+    // main loop
     while (true) {
       // handle events
       auto input = host.pump ();
       if (input.quit)
         break;
 
+      // advance simulation
       syncer.update ();
       while (syncer.need_tick ()) {
         syncer.begin_tick ();
         // ...
       }
 
-      redraw (
-        host.width (),
-        host.height (),
-        syncer.time () + syncer.time_step * syncer.alpha (),
-        mesh
-      );
+      // update stage
+      required_chunks = stage.relocate (player_pos, std::move (required_chunks));
+      for (vec3i chunk_pos : required_chunks) {
+        // load or generate chunk at chunk_pos
+        std::cerr << "generating chunk for " << chunk_pos << "... ";
+        auto chunk = load_chunk (chunk_pos);
+
+        stage.insert (std::move (chunk), chunk_pos);
+        std::cerr << "done\n";
+      }
+
+      // generate meshes
+      for (auto idx = stage.indexer (); idx; idx++) {
+        auto chunk = stage.at_relative (idx.vec ());
+
+        // Skip meshgen for unloaded chunks or chunks with meshes
+        if (!chunk || chunk->mesh)
+          continue;
+
+        // get +ve adjacent chunk data for correct meshgen
+        // chunks on the +ve boundary of the stage naturally have no adjacencies
+        Array<3, ChunkData const*> adjs;
+        if (!get_adjacent_chunk_datas (adjs, stage, idx.vec ()))
+          continue;
+
+        std::cerr << "generating mesh for " << idx.vec () << "... ";
+        chunk->mesh = ChunkMesh::generate (chunk->data.get (), adjs);
+        if (!chunk->mesh)
+          std::cerr << "failed\n";
+
+        std::cerr << "ok\n";
+      }
+
+      // redraw
+      for (auto idx = stage.indexer (); idx; idx++) {
+        auto chunk = stage.at_relative (idx.vec ());
+        if (!chunk || !chunk->mesh)
+          continue;
+
+        frame.add_cmesh (chunk->mesh.get ());
+      }
+
+      frame = frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());
 
       gl_ctx.flip ();
     }
 
-  exit_loop:;
+    return 0; // shut up clang ffs
+  }
+  catch (const std::exception& e) {
+    fprintf (stderr, "Exception!\n%s\n", e.what ());
+    return 1;
   }
 }
 

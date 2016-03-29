@@ -7,10 +7,11 @@
 #include <EGL/egl.h>
 
 #include "input.hpp"
+#include "vector.hpp"
 
 namespace nd {
   class XHost {
-    struct Impl;
+    class Impl;
     Impl* impl;
     XHost (Impl*);
 
@@ -22,6 +23,10 @@ namespace nd {
 
     int width () const;
     int height () const;
+
+    v2i dims () const {
+      return { width (), height () };
+    }
 
     EGLNativeDisplayType egl_display ();
     EGLNativeWindowType  egl_window  ();

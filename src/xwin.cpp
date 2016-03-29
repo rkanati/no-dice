@@ -115,8 +115,6 @@ namespace nd {
   }
 
   XHost::Impl XHost::Impl::create () {
-    xcb_generic_error_t* xcb_err = nullptr;
-
     Display* disp = XOpenDisplay (nullptr);
     if (!disp)
       throw std::runtime_error ("XOpenDisplay failed");

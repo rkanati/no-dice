@@ -4,19 +4,16 @@
 
 #pragma once
 
+#include "types.hpp"
 #include "chunk.hpp"
 
 namespace nd {
   class ChunkMesh {
-    struct Impl;
-    Impl* impl;
-    ChunkMesh (Impl*);
-
   public:
-    static ChunkMesh generate (const Chunk&, const Chunk&, const Chunk&, const Chunk&);
-    ~ChunkMesh ();
+    using Shared = SharePtr<ChunkMesh>;
+    static Shared generate (ChunkData const* chunk, Array<3, ChunkData const*> const& adjs);
 
-    void draw () const;
+    virtual void draw () const = 0;
   };
 }
 

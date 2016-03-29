@@ -9,7 +9,9 @@
 namespace nd {
   using Block = u8;
 
-  struct Chunk {
+  struct ChunkData {
+    using Shared = SharePtr<ChunkData>;
+
     Block blocks [16][16][16];
   };
 }

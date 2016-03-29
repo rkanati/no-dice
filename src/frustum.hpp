@@ -1,0 +1,6 @@
+//
+// no-dice
+//
+
+#pragma once
+
