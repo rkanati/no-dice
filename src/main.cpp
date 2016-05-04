@@ -174,7 +174,7 @@ namespace nd {
         if (!chunk || !chunk->mesh)
           continue;
 
-        frame.add_cmesh (chunk->mesh.get ());
+        frame.add_cmesh (chunk->mesh.get (), chunk->position * vec3i {16,16,16});
       }
 
       frame = frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());

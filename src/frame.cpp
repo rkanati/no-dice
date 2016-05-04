@@ -40,7 +40,7 @@ namespace nd {
     glMatrixMode (GL_PROJECTION);
     glLoadIdentity ();
     double aspect = double (dims.x) / double (dims.y);
-    gluPerspective (75.0 / aspect, aspect, 0.1, 100.0);
+    gluPerspective (75.0 / aspect, aspect, 0.1, 1000.0);
 
     glMatrixMode (GL_MODELVIEW);
     glLoadIdentity ();
@@ -50,14 +50,15 @@ namespace nd {
       0, 0, 1
     );
 
-    glRotatef (time * 50.0f, 0, 0, 1);
-    glTranslatef (-8, -8, -8);
-    // // glRotatef (time * 100.0f, 0.5773f, 0.5773f, 0.5773f);
+    for (auto const& item : chunk_items) {
+      glPushMatrix ();
+      glRotatef (time * 50.f, 0, 0, 1);
+      glTranslatef (item.offset.x, item.offset.y, item.offset.z);
+      item.mesh->draw ();
+      glPopMatrix ();
+    }
 
-    for (auto mesh : cmeshes)
-      mesh->draw ();
-
-    return Frame { std::move (cmeshes) };
+    return Frame { std::move (chunk_items) };
   }
 }
 

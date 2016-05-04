@@ -9,21 +9,28 @@
 
 namespace nd {
   class Frame {
-    std::vector <ChunkMesh const*> cmeshes;
+    struct ChunkItem {
+      ChunkMesh const* mesh;
+      vec3i offset;
+    };
+
+    std::vector<ChunkItem> chunk_items;
+
+    explicit Frame (std::vector<ChunkItem> chunk_items) :
+      chunk_items (std::move (chunk_items))
+    {
+      chunk_items.clear ();
+    }
 
   public:
-    explicit Frame (std::vector <ChunkMesh const*> cms = { }) :
-      cmeshes (std::move (cms))
-    {
-      cmeshes.clear ();
-    }
+    Frame () = default;
 
     static inline Frame recycle (Frame& old) {
-      return Frame { std::move (old.cmeshes) };
+      return Frame { std::move (old.chunk_items) };
     }
 
-    void add_cmesh (ChunkMesh const* cmesh) {
-      cmeshes.push_back (cmesh);
+    void add_cmesh (ChunkMesh const* cmesh, vec3i offset) {
+      chunk_items.push_back (ChunkItem { cmesh, offset });
     }
 
     Frame draw (v2i dims, float time, float alpha);
