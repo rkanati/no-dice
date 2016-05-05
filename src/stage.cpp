@@ -15,7 +15,7 @@ namespace nd {
   }
 
   int Stage::index_rel (vec3i rel) const {
-    return index_abs (centre + rel);
+    return index_abs (abs_for_rel (rel));
   }
 
   StageChunk& Stage::chunk_at (int index) {
@@ -36,20 +36,16 @@ namespace nd {
     delete[] chunks;
   }
 
-  auto Stage::relocate (vec3i new_centre, std::vector<vec3i> missing)
-    -> std::vector<vec3i>
-  {
+  void Stage::relocate (vec3i new_centre, std::vector<vec3i>& missing) {
     centre = new_centre;
 
     missing.clear ();
     for (auto iter = vec_iter (mins (), maxs ()); iter; iter++) {
-      vec3i correct_pos = centre + iter.vec ();
+      vec3i correct_pos = abs_for_rel (iter.vec ());
       auto& chunk = chunk_at (index_rel (iter.vec ()));
       if (!chunk || chunk.position != correct_pos)
         missing.push_back (correct_pos);
     }
-
-    return missing;
   }
 
   void Stage::insert (StageChunk chunk, vec3i pos) {
@@ -70,11 +66,11 @@ namespace nd {
   }
 
   auto Stage::at_relative (vec3i off) const -> StageChunk const* {
-    return at_absolute (centre + off);
+    return at_absolute (abs_for_rel (off));
   }
 
   auto Stage::at_relative (vec3i off) -> StageChunk* {
-    return at_absolute (centre + off);
+    return at_absolute (abs_for_rel (off));
   }
 }
 

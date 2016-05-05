@@ -19,6 +19,10 @@ namespace nd {
     StageChunk* const chunks;
     vec3i             centre;
 
+    vec3i abs_for_rel (vec3i rel) const {
+      return rel + centre;
+    }
+
     int index_abs (vec3i pos) const;
     int index_rel (vec3i rel) const;
 
@@ -29,8 +33,21 @@ namespace nd {
     Stage (unsigned radius);
     ~Stage ();
 
-    auto relocate (vec3i new_centre, std::vector<vec3i> missing = { })
-      -> std::vector<vec3i>;
+    void relocate (vec3i new_centre, std::vector<vec3i>& missing);
+
+    template<typename Pred>
+    void find_all_if (Pred pred, std::vector<vec3i>& list) {
+      list.clear ();
+
+      for (auto rel = indexer (); rel; rel++) {
+        auto chunk = at_relative (rel.vec ());
+        if (!chunk)
+          continue;
+
+        if (pred (*chunk))
+          list.push_back (abs_for_rel (rel.vec ()));
+      }
+    }
 
     void insert (StageChunk chunk, vec3i pos);
 
@@ -53,7 +70,7 @@ namespace nd {
       return -maxs ();
     }
 
-    auto indexer () const {
+    auto indexer () const -> VecIter<3, int> {
       return vec_iter (mins (), maxs ());
     }
   };

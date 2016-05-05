@@ -70,14 +70,25 @@ namespace nd {
 
     xcb_generic_event_t* ev;
     while ((ev = xcb_poll_for_event (conn))) {
-      switch (XCB_EVENT_RESPONSE_TYPE (ev)) {
+      auto resp_type = XCB_EVENT_RESPONSE_TYPE (ev); 
+      switch (resp_type) {
         case XCB_CLIENT_MESSAGE: {
           auto cmev = (xcb_client_message_event_t*) ev;
           auto msg = cmev->data.data32[0];
-          if (msg == wm_delete_atom) {
+          if (msg == wm_delete_atom)
             inframe.quit = true;
-          }
         }
+
+        case XCB_BUTTON_PRESS:
+        case XCB_BUTTON_RELEASE:
+          //handle_button ((xcb_button_press_event_t const*) ev, resp_type == XCB_BUTTON_PRESS);
+          //continue;
+
+        case XCB_KEY_PRESS:
+        case XCB_KEY_RELEASE:
+          //handle_key ((xcb_key_press_event_t const*) ev, resp_type == XCB_KEY_PRESS);
+          //continue;
+
         default:;
       }
       free (ev);

@@ -86,7 +86,7 @@ namespace nd {
   {
     static auto const offsets = Array<3, vec3i> {{ v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1} }};
     for (auto i = 0; i != 3; i++) {
-      auto adj_chunk = stage.at_relative (pos + offsets[i]);
+      auto adj_chunk = stage.at_absolute (pos + offsets[i]);
       if (!adj_chunk) return false;
 
       auto const adj_data = adj_chunk->data.get ();
@@ -103,6 +103,40 @@ namespace nd {
     for (auto x : v)
       os << x << " ";
     return os << ")";
+  }
+
+  void load_chunks_into_stage (Stage& stage, std::vector<vec3i>& required_chunks) {
+    if (required_chunks.empty ())
+      return;
+
+    std::cerr << "generating chunks... ";
+
+    for (vec3i chunk_pos : required_chunks) {
+      std::cerr << chunk_pos << " ";
+
+      // load or generate chunk at chunk_pos
+      auto chunk = load_chunk (chunk_pos);
+
+      stage.insert (std::move (chunk), chunk_pos);
+    }
+
+    std::cerr << "done\n";
+  }
+
+  void generate_meshes (Stage& stage, std::vector<vec3i>& required_chunks) {
+    if (required_chunks.empty ())
+      return;
+
+    for (vec3i pos : required_chunks) {
+      auto chunk = stage.at_absolute (pos);
+      assert (!!chunk && !chunk->mesh);
+
+      Array<3, ChunkData const*> adjs;
+      if (!get_adjacent_chunk_datas (adjs, stage, pos))
+        continue;
+
+      chunk->mesh = ChunkMesh::generate (chunk->data.get (), adjs);
+    }
   }
 
   extern "C" int main () try {
@@ -136,36 +170,14 @@ namespace nd {
       }
 
       // update stage
-      required_chunks = stage.relocate (player_pos, std::move (required_chunks));
-      for (vec3i chunk_pos : required_chunks) {
-        // load or generate chunk at chunk_pos
-        std::cerr << "generating chunk for " << chunk_pos << "... ";
-        auto chunk = load_chunk (chunk_pos);
-
-        stage.insert (std::move (chunk), chunk_pos);
-        std::cerr << "done\n";
-      }
+      stage.relocate (player_pos, required_chunks);
+      load_chunks_into_stage (stage, required_chunks);
 
       // generate meshes
-      for (auto idx = stage.indexer (); idx; idx++) {
-        auto chunk = stage.at_relative (idx.vec ());
-
-        // Skip meshgen for unloaded chunks or chunks with meshes
-        if (!chunk || chunk->mesh)
-          continue;
-
-        // get +ve adjacent chunk data for correct meshgen
-        // chunks on the +ve boundary of the stage naturally have no adjacencies
-        Array<3, ChunkData const*> adjs;
-        if (!get_adjacent_chunk_datas (adjs, stage, idx.vec ()))
-          continue;
-
-        std::cerr << "generating mesh for " << idx.vec () << "... ";
-        chunk->mesh = ChunkMesh::generate (chunk->data.get (), adjs);
-        if (!chunk->mesh)
-          std::cerr << "failed\n";
-
-        std::cerr << "ok\n";
+      if (!required_chunks.empty ()) {
+        auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh; };
+        stage.find_all_if (needs_mesh, required_chunks);
+        generate_meshes (stage, required_chunks);
       }
 
       // redraw
