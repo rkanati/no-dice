@@ -5,7 +5,7 @@
 #include <GL/glu.h>
 
 namespace nd {
-  Frame Frame::draw (v2i dims, float time, float alpha) {
+  void Frame::draw (v2i dims, float time, float alpha) {
     if (dims.x < 1) dims.x = 1;
     if (dims.y < 1) dims.y = 1;
 
@@ -32,7 +32,7 @@ namespace nd {
     glEnd ();
 
     // foreground
-    glPolygonMode (GL_FRONT, GL_LINE);
+    glPolygonMode (GL_FRONT, GL_FILL);
 
     glEnable (GL_DEPTH_TEST);
     glDepthMask (GL_TRUE);
@@ -58,7 +58,7 @@ namespace nd {
       glPopMatrix ();
     }
 
-    return Frame { std::move (chunk_items) };
+    chunk_items.clear ();
   }
 }
 

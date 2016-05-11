@@ -33,30 +33,6 @@ namespace nd {
     Stage (unsigned radius);
     ~Stage ();
 
-    void relocate (vec3i new_centre, std::vector<vec3i>& missing);
-
-    template<typename Pred>
-    void find_all_if (Pred pred, std::vector<vec3i>& list) {
-      list.clear ();
-
-      for (auto rel = indexer (); rel; rel++) {
-        auto chunk = at_relative (rel.vec ());
-        if (!chunk)
-          continue;
-
-        if (pred (*chunk))
-          list.push_back (abs_for_rel (rel.vec ()));
-      }
-    }
-
-    void insert (StageChunk chunk, vec3i pos);
-
-    auto at_absolute (vec3i pos) const -> StageChunk const*;
-    auto at_relative (vec3i off) const -> StageChunk const*;
-
-    auto at_absolute (vec3i pos) -> StageChunk*;
-    auto at_relative (vec3i off) -> StageChunk*;
-
     unsigned size () const {
       return dim * dim * dim;
     }
@@ -70,9 +46,33 @@ namespace nd {
       return -maxs ();
     }
 
-    auto indexer () const -> VecIter<3, int> {
-      return vec_iter (mins (), maxs ());
+    auto indices () const {
+      return vec_range (mins (), maxs ());
     }
+
+    void relocate (vec3i new_centre, std::vector<vec3i>& missing);
+
+    template<typename Pred>
+    void find_all_if (Pred pred, std::vector<vec3i>& list) {
+      list.clear ();
+
+      for (auto rel : indices ()) {
+        auto chunk = at_relative (rel);
+        if (!chunk)
+          continue;
+
+        if (pred (*chunk))
+          list.push_back (abs_for_rel (rel));
+      }
+    }
+
+    void insert (StageChunk chunk, vec3i pos);
+
+    auto at_absolute (vec3i pos) const -> StageChunk const*;
+    auto at_relative (vec3i off) const -> StageChunk const*;
+
+    auto at_absolute (vec3i pos) -> StageChunk*;
+    auto at_relative (vec3i off) -> StageChunk*;
   };
 }
 

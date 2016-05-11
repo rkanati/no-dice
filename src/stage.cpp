@@ -40,9 +40,9 @@ namespace nd {
     centre = new_centre;
 
     missing.clear ();
-    for (auto iter = vec_iter (mins (), maxs ()); iter; iter++) {
-      vec3i correct_pos = abs_for_rel (iter.vec ());
-      auto& chunk = chunk_at (index_rel (iter.vec ()));
+    for (auto rel : indices ()) {
+      vec3i correct_pos = abs_for_rel (rel);
+      auto& chunk = chunk_at (index_rel (rel));
       if (!chunk || chunk.position != correct_pos)
         missing.push_back (correct_pos);
     }

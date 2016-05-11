@@ -39,29 +39,19 @@ namespace nd {
 
   auto make_test_chunkdata () -> ChunkData {
     ChunkData chunk;
-    for (int z = 0; z != 16; z++) {
-      for (int y = 0; y != 16; y++) {
-        for (int x = 0; x != 16; x++) {
-          int a = z/2, b = 15-z/2;
-          if (x < a || x > b || y < a || y > b || (z) % 2)
-            chunk.blocks [x][y][z] = 0;
-          else
-            chunk.blocks [x][y][z] = 1;
-        }
-      }
+    for (auto i : chunk.indices ()) {
+      int const a = i.z + 1,
+                b = 15 - i.z;
+      bool const empty = (i.x < a || i.x > b || i.y < a || i.y > b);
+      chunk[i] = empty? 0 : 1;
     }
     return chunk;
   }
 
   auto make_blank_chunkdata () -> ChunkData {
     ChunkData blank;
-    for (int z = 0; z != 16; z++) {
-      for (int y = 0; y != 16; y++) {
-        for (int x = 0; x != 16; x++) {
-          blank.blocks [x][y][z] = 0;
-        }
-      }
-    }
+    for (auto i : blank.indices ())
+      blank[i] = 0;
     return blank;
   }
 
@@ -69,8 +59,10 @@ namespace nd {
     static auto const test_cdata = make_test_chunkdata ();
     static auto const blank_cdata = make_blank_chunkdata ();
 
-    if (pos == vec3i{0,0,0}) return test_cdata;
-    else return blank_cdata;
+    if (pos.z == -1 && (pos.x % 2 == 0) && (pos.y % 2 == 0))
+      return test_cdata;
+    else
+      return blank_cdata;
   }
 
   auto load_chunk (vec3i pos) -> StageChunk {
@@ -148,7 +140,7 @@ namespace nd {
     // persistent state
     Syncer syncer;
 
-    Stage stage (3);
+    Stage stage (9);
     vec3i player_pos {0,0,0};
 
     // transient state
@@ -181,15 +173,15 @@ namespace nd {
       }
 
       // redraw
-      for (auto idx = stage.indexer (); idx; idx++) {
-        auto chunk = stage.at_relative (idx.vec ());
+      for (auto idx : stage.indices ()) {
+        auto chunk = stage.at_relative (idx);
         if (!chunk || !chunk->mesh)
           continue;
 
         frame.add_cmesh (chunk->mesh.get (), chunk->position * vec3i {16,16,16});
       }
 
-      frame = frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());
+      frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());
 
       gl_ctx.flip ();
     }
