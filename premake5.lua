@@ -9,7 +9,7 @@ project "no-dice"
   files { "src/**.hpp", "src/**.cpp" }
 
   includedirs { "rk-core/include", "rk-math/include" }
-  links { "xcb", "X11-xcb", "X11", "GL", "GLU", "EGL" }
+  links { "xcb", "X11-xcb", "X11", "GL", "GLU", "EGL", "xcb-keysyms" }
 
   warnings "Extra"
 

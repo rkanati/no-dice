@@ -5,7 +5,7 @@
 #include <GL/glu.h>
 
 namespace nd {
-  void Frame::draw (v2i dims, float time, float alpha) {
+  void Frame::draw (v2i dims, float, float alpha) {
     if (dims.x < 1) dims.x = 1;
     if (dims.y < 1) dims.y = 1;
 

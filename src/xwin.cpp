@@ -13,119 +13,163 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_event.h>
+#include <xcb/xcb_keysyms.h>
 #include <X11/Xlib-xcb.h>
 
 namespace nd {
-  class XHost::Impl {
-    Display* disp;
-    xcb_connection_t* conn;
-    xcb_window_t win;
-    xcb_atom_t wm_delete_atom;
-
-    int wide, high;
-
-    Impl (Display* d, xcb_connection_t* c, xcb_window_t w, xcb_atom_t wmda) :
-      disp (d), conn (c), win (w), wm_delete_atom (wmda),
-      wide (1024), high (768)
-    { }
+  class Keyboard final : public InputDevice {
+    uint            pending_release_key;
+    xcb_timestamp_t pending_release_time;
 
   public:
-    static Impl create ();
-    ~Impl ();
+    Keyboard () :
+      pending_release_key (0)
+    { }
 
-    InputFrame pump ();
+    void handle_key (xcb_generic_event_t const* ev, InputEventQueue& out) {
+      auto kev = (xcb_key_press_event_t const*) ev;
+      bool down = (kev->response_type == XCB_KEY_PRESS);
+      // auto sym = xcb_key_symbols_get_keysym (key_syms, kev->detail, 0);
 
-    int width () const {
-      return wide;
+      // ugly hack to get around Xorg's refusal to tell you anything physical about keys
+      // in a consistent way. assumes evdev/hid/xkb-ish codes with the xf86-input-evdev
+      // style offset.
+      auto code = (uint) kev->detail - 8;
+
+      if (down) {
+        // release-then-press with the same timestamp is a key repeat. ignore it.
+        if (kev->time == pending_release_time && code == pending_release_key) {
+          pending_release_key = 0;
+        }
+        else {
+          // flush the pending release event
+          flush (out);
+          out.push_back (InputEvent { { this, code }, InputType::bistate, false, down });
+        }
+      }
+      else {
+        // defer release events for repeat detection
+        flush (out);
+        pending_release_key = code;
+        pending_release_time = kev->time;
+      }
     }
 
-    int height () const {
-      return high;
-    }
+    void flush (InputEventQueue& out) {
+      if (!pending_release_key)
+        return;
 
-    EGLNativeDisplayType egl_display () {
-      return disp;
-    }
-
-    EGLNativeWindowType egl_window () {
-      return win;
+      out.push_back (InputEvent { { this, pending_release_key }, InputType::bistate, false, false });
+      pending_release_key = 0;
     }
   };
 
-  XHost::XHost (Impl* i) :
-    impl (i)
-  { }
+  class Pointer final : public InputDevice {
+  public:
+    auto handle_button (xcb_generic_event_t const* ev) {
+      auto bev = (xcb_button_press_event_t const*) ev;
+      bool down = (bev->response_type == XCB_BUTTON_PRESS);
+      return InputEvent { { this, bev->detail }, InputType::bistate, false, down };
+    }
+  };
 
-  XHost::Impl::~Impl () {
-    XCloseDisplay (disp);
-  }
+  class XHostImpl final : public XHost {
+    Display*           const disp;
+    xcb_connection_t*  const conn;
+    xcb_window_t       const win;
+    xcb_atom_t         const wm_delete_atom;
+    xcb_key_symbols_t* const key_syms;
 
-  XHost::~XHost () {
-    delete impl;
-  }
+    Keyboard keyb;
+    Pointer point;
 
-  InputFrame XHost::Impl::pump () {
-    xcb_generic_error_t* xcb_err;
-    InputFrame inframe;
+    int wide, high;
 
-    xcb_generic_event_t* ev;
-    while ((ev = xcb_poll_for_event (conn))) {
-      auto resp_type = XCB_EVENT_RESPONSE_TYPE (ev); 
+  public:
+    XHostImpl (Display* d, xcb_connection_t* c, xcb_window_t w, xcb_atom_t wmda, xcb_key_symbols_t* ks) :
+      disp (d),
+      conn (c),
+      win (w),
+      wm_delete_atom (wmda),
+      key_syms (ks),
+      wide (1024),
+      high (768)
+    { }
+
+    ~XHostImpl () {
+      XCloseDisplay (disp);
+    }
+
+    void handle_event (InputFrame& inframe, xcb_generic_event_t const* ev) {
+      auto resp_type = XCB_EVENT_RESPONSE_TYPE (ev);
+
       switch (resp_type) {
         case XCB_CLIENT_MESSAGE: {
           auto cmev = (xcb_client_message_event_t*) ev;
           auto msg = cmev->data.data32[0];
           if (msg == wm_delete_atom)
             inframe.quit = true;
-        }
+        } return;
 
         case XCB_BUTTON_PRESS:
-        case XCB_BUTTON_RELEASE:
-          //handle_button ((xcb_button_press_event_t const*) ev, resp_type == XCB_BUTTON_PRESS);
-          //continue;
+        case XCB_BUTTON_RELEASE: {
+          inframe.events.push_back (point.handle_button (ev));
+        } return;
 
         case XCB_KEY_PRESS:
-        case XCB_KEY_RELEASE:
-          //handle_key ((xcb_key_press_event_t const*) ev, resp_type == XCB_KEY_PRESS);
-          //continue;
+        case XCB_KEY_RELEASE: {
+          keyb.handle_key (ev, inframe.events);
+        } return;
 
         default:;
       }
-      free (ev);
     }
 
-    auto get_geom_cookie = xcb_get_geometry (conn, win);
-    auto* geom = xcb_get_geometry_reply (conn, get_geom_cookie, &xcb_err);
-    if (geom) {
-      wide = geom->width;
-      high = geom->height;
-      free (geom);
+    InputFrame pump () override {
+      xcb_generic_error_t* xcb_err;
+      InputFrame inframe;
+
+      xcb_generic_event_t* ev;
+      while ((ev = xcb_poll_for_event (conn))) {
+        handle_event (inframe, ev);
+        free (ev);
+      }
+
+      keyb.flush (inframe.events);
+
+      auto get_geom_cookie = xcb_get_geometry (conn, win);
+      auto* geom = xcb_get_geometry_reply (conn, get_geom_cookie, &xcb_err);
+      if (geom) {
+        wide = geom->width;
+        high = geom->height;
+        free (geom);
+      }
+
+      return inframe;
     }
 
-    return inframe;
-  }
+    v2i dims () const override {
+      return { wide, high };
+    }
 
-  InputFrame XHost::pump () {
-    return impl->pump ();
-  }
+    EGLNativeDisplayType egl_display () override {
+      return disp;
+    }
 
-  int XHost::width () const {
-    return impl->width ();
-  }
+    EGLNativeWindowType egl_window () override {
+      return win;
+    }
 
-  int XHost::height () const {
-    return impl->height ();
-  }
+    InputDevice* keyboard () override {
+      return &keyb;
+    }
 
-  EGLNativeDisplayType XHost::egl_display () {
-    return impl->egl_display ();
-  }
+    InputDevice* pointer () override {
+      return &point;
+    }
+  };
 
-  EGLNativeWindowType XHost::egl_window () {
-    return impl->egl_window ();
-  }
-
-  XHost::Impl XHost::Impl::create () {
+  XHost::Ptr XHost::create () {
     Display* disp = XOpenDisplay (nullptr);
     if (!disp)
       throw std::runtime_error ("XOpenDisplay failed");
@@ -191,14 +235,14 @@ namespace nd {
     if (err)
       throw std::runtime_error ("xcb_map_window_checked failed");
 
+    xcb_key_symbols_t* keysyms = xcb_key_symbols_alloc (conn);
+    if (!keysyms)
+      throw std::runtime_error ("xcb_key_symbols_alloc failed");
+
     xcb_flush (conn);
 
     disp_guard.relieve ();
-    return Impl (disp, conn, win, wm_delete_atom);
-  }
-
-  XHost XHost::create () {
-    return new Impl (Impl::create ());
+    return std::make_unique<XHostImpl> (disp, conn, win, wm_delete_atom, keysyms);
   }
 }
 

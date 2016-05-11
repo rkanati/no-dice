@@ -11,25 +11,23 @@
 
 namespace nd {
   class XHost {
-    class Impl;
-    Impl* impl;
-    XHost (Impl*);
-
   public:
-    static XHost create ();
-    ~XHost ();
+    using Ptr = std::unique_ptr<XHost>;
 
-    InputFrame pump ();
+    static Ptr create ();
 
-    int width () const;
-    int height () const;
+    virtual InputFrame pump () = 0;
 
-    v2i dims () const {
-      return { width (), height () };
-    }
+    virtual v2i dims () const = 0;
 
-    EGLNativeDisplayType egl_display ();
-    EGLNativeWindowType  egl_window  ();
+    int width  () const { return dims ().x; }
+    int height () const { return dims ().y; }
+
+    virtual auto egl_display () -> EGLNativeDisplayType = 0;
+    virtual auto egl_window  () -> EGLNativeWindowType = 0;
+
+    virtual auto keyboard () -> InputDevice* = 0;
+    virtual auto pointer  () -> InputDevice* = 0;
   };
 }
 

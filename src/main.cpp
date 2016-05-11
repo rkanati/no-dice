@@ -14,6 +14,7 @@
 #include "syncer.hpp"
 #include "stage-chunk.hpp"
 #include "chunk-source.hpp"
+#include "key.hpp"
 
 #include <cstdlib>
 #include <cstdint>
@@ -67,7 +68,7 @@ namespace nd {
         return blank_chunk;
     }
 
-    void store (vec3i pos, ChunkData::Shared)
+    void store (vec3i, ChunkData::Shared)
     { }
   };
 
@@ -142,7 +143,7 @@ namespace nd {
   void run () {
     // subsystems
     auto host = XHost::create ();
-    auto gl_ctx = GLContext::establish (host.egl_display (), host.egl_window ());
+    auto gl_ctx = GLContext::establish (host->egl_display (), host->egl_window ());
     configure_gl ();
 
     TestChunkSource source;
@@ -154,6 +155,11 @@ namespace nd {
     Camera camera (nil);
     camera.dir = v3f{1,0,0};
 
+    bool x_posve_go = false,
+         x_negve_go = false,
+         y_posve_go = false,
+         y_negve_go = false;
+
     // transient state
     std::vector<vec3i> required_chunks;
     Frame frame;
@@ -161,9 +167,37 @@ namespace nd {
     // main loop
     while (true) {
       // handle events
-      auto input = host.pump ();
+      auto input = host->pump ();
       if (input.quit)
         break;
+
+      for (auto const& ev : input.events) {
+        if (ev.cause.device == host->keyboard ()) {
+          switch ((Key) ev.cause.index) {
+            case Key::w: x_posve_go = ev.state; break;
+            case Key::s: x_negve_go = ev.state; break;
+            case Key::a: y_posve_go = ev.state; break;
+            case Key::d: y_negve_go = ev.state; break;
+            default:;
+          }
+        }
+        else if (ev.cause.device == host->pointer ()) {
+        }
+      }
+
+      v3f camera_move{0,0,0};
+
+      if (x_posve_go != x_negve_go) {
+        if (x_posve_go) camera_move.x = 1.0f;
+        else            camera_move.x = -1.0f;
+      }
+
+      if (y_posve_go != y_negve_go) {
+        if (y_posve_go) camera_move.y = 1.0f;
+        else            camera_move.y = -1.0f;
+      }
+
+      camera_move = unit (camera_move);
 
       // advance simulation
       Camera old_camera = camera;
@@ -172,7 +206,7 @@ namespace nd {
       while (syncer.need_tick ()) {
         syncer.begin_tick ();
         old_camera = camera;
-        camera.pos.x += 1.0f;
+        camera.pos += camera_move;
       }
 
       vec3i camera_chunk = floor (camera.pos) / 16;
@@ -199,7 +233,7 @@ namespace nd {
 
       frame.set_camera (old_camera, camera);
 
-      frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());
+      frame.draw (host->dims (), syncer.frame_time (), syncer.alpha ());
 
       gl_ctx.flip ();
     }
