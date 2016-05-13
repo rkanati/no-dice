@@ -12,8 +12,8 @@
 namespace nd {
   class ChunkSource {
   public:
-    virtual auto load  (vec3i chunk_pos) -> std::shared_ptr <ChunkData>;
-    virtual void store (vec3i chunk_pos, const ChunkData&);
+    virtual auto get   (vec3i chunk_pos) -> ChunkData::Shared = 0;
+    virtual void store (vec3i chunk_pos, ChunkData::Shared) = 0;
   };
 }
 

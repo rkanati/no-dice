@@ -18,6 +18,7 @@ namespace nd {
   public:
     const double tick_hz = 50.0;
     const double time_step = 1.0 / tick_hz;
+    const double max_update = 5.0;
 
     Syncer () :
       prev_real_time (now ()),
@@ -29,6 +30,8 @@ namespace nd {
       double real_time = now ();
       accumulator += real_time - prev_real_time;
       prev_real_time = real_time;
+      if (accumulator > max_update)
+        accumulator = max_update;
     }
 
     bool need_tick () const {

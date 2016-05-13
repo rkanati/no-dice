@@ -17,10 +17,11 @@ namespace nd {
     std::vector<Vertex> arrays;
 
   public:
-    ChunkMeshImpl (std::vector<Vertex> arrays) :
-      arrays (std::move (arrays))
-    { }
+    ChunkMeshImpl () {
+      arrays.reserve (4 * 3 * 16 * 16 * 16);
+    }
 
+    void regen (ChunkData const* chunk, Array<3, ChunkData const*> const& adjs) override;
     void draw () const override;
   };
 
@@ -31,12 +32,11 @@ namespace nd {
     glDrawArrays (GL_QUADS, 0, arrays.size ());
   }
 
-  ChunkMesh::Shared ChunkMesh::generate (
+  void ChunkMeshImpl::regen (
     ChunkData const* chunk,
-    Array<3, ChunkData const*> const& adjs
-  ) {
-    std::vector<Vertex> buf;
-    buf.reserve (4 * 3 * 16 * 16 * 16);
+    Array<3, ChunkData const*> const& adjs)
+  {
+    arrays.clear ();
 
     for (int z = 0; z != 16; z++) {
       auto zadj = (z != 15)? chunk->blocks : adjs[2]->blocks;
@@ -51,49 +51,51 @@ namespace nd {
 
           if (current != 0) { // face out
             if (xadj [(x+1)%16][y][z] == 0) { // +x
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
             }
             if (yadj [x][(y+1)%16][z] == 0) { // +y
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
             }
             if (zadj [x][y][(z+1)%16] == 0) { // +z
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
             }
           }
           else if (current == 0) { // face in
             if (xadj [(x+1)%16][y][z] != 0) { // +x
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
             }
             if (yadj [x][(y+1)%16][z] != 0) { // +y
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
             }
             if (zadj [x][y][(z+1)%16] != 0) { // +z
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
-              buf.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
             }
           }
         }
       }
     }
+  }
 
-    return share<ChunkMeshImpl> (std::move (buf));
+  ChunkMesh::Shared ChunkMesh::create () {
+    return std::make_shared<ChunkMeshImpl> ();
   }
 }
 

@@ -59,6 +59,8 @@ namespace nd {
     if (!ok)
       throw std::runtime_error ("eglMakeCurrent failed");
 
+    eglSwapInterval (egl_disp, 1);
+
     return GLContext (egl_disp, egl_ctx, egl_surf);
   }
 

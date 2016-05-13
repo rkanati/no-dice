@@ -16,11 +16,11 @@ namespace nd {
     Impl* impl;
 
   public:
-    ChunkCache (ChunkSource& src);
+    ChunkCache ();
     ~ChunkCache ();
 
-    auto load (vec3i chunk_pos) -> std::shared_ptr <ChunkData>;
-    void store (vec3i chunk_pos, const ChunkData& chunk);
+    auto load  (vec3i chunk_pos) -> std::shared_ptr<ChunkData>;
+    void store (vec3i chunk_pos, std::shared_ptr<ChunkData>);
   };
 }
 

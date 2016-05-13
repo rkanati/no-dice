@@ -13,8 +13,8 @@
 #include "stage.hpp"
 #include "syncer.hpp"
 #include "stage-chunk.hpp"
+#include "chunk-source.hpp"
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -37,7 +37,7 @@ namespace nd {
     glEnableClientState (GL_COLOR_ARRAY);
   }
 
-  auto make_test_chunkdata () -> ChunkData {
+  auto make_test_chunkdata () {
     ChunkData chunk;
     for (auto i : chunk.indices ()) {
       int const a = i.z + 1,
@@ -45,30 +45,34 @@ namespace nd {
       bool const empty = (i.x < a || i.x > b || i.y < a || i.y > b);
       chunk[i] = empty? 0 : 1;
     }
-    return chunk;
+    return std::make_shared<ChunkData> (chunk);
   }
 
-  auto make_blank_chunkdata () -> ChunkData {
+  auto make_blank_chunkdata () {
     ChunkData blank;
     for (auto i : blank.indices ())
       blank[i] = 0;
-    return blank;
+    return std::make_shared<ChunkData> (blank);
   }
 
-  auto get_cdata (vec3i pos) -> ChunkData {
-    static auto const test_cdata = make_test_chunkdata ();
-    static auto const blank_cdata = make_blank_chunkdata ();
+  class TestChunkSource final : public ChunkSource {
+    ChunkData::Shared test_chunk = make_test_chunkdata (),
+                      blank_chunk = make_blank_chunkdata ();
 
-    if (pos.z == -1 && (pos.x % 2 == 0) && (pos.y % 2 == 0))
-      return test_cdata;
-    else
-      return blank_cdata;
-  }
+  public:
+    ChunkData::Shared get (vec3i pos) override {
+      if (pos.z == -1 && (pos.x % 2 == 0) && (pos.y % 2 == 0))
+        return test_chunk;
+      else
+        return blank_chunk;
+    }
 
-  auto load_chunk (vec3i pos) -> StageChunk {
-    auto cdata = share (get_cdata (pos));
-    assert (!!cdata);
-    return StageChunk (std::move (cdata), pos);
+    void store (vec3i pos, ChunkData::Shared)
+    { }
+  };
+
+  auto load_chunk (ChunkSource& source, vec3i pos) -> StageChunk {
+    return StageChunk (source.get (pos), pos);
   }
 
   bool get_adjacent_chunk_datas (
@@ -97,22 +101,26 @@ namespace nd {
     return os << ")";
   }
 
-  void load_chunks_into_stage (Stage& stage, std::vector<vec3i>& required_chunks) {
+  void load_chunks_into_stage (
+    ChunkSource& source,
+    Stage& stage,
+    std::vector<vec3i>& required_chunks
+  ) {
     if (required_chunks.empty ())
       return;
 
-    std::cerr << "generating chunks... ";
+    // std::cerr << "generating chunks... ";
 
     for (vec3i chunk_pos : required_chunks) {
-      std::cerr << chunk_pos << " ";
+      // std::cerr << chunk_pos << " ";
 
       // load or generate chunk at chunk_pos
-      auto chunk = load_chunk (chunk_pos);
+      auto chunk = load_chunk (source, chunk_pos);
 
       stage.insert (std::move (chunk), chunk_pos);
     }
 
-    std::cerr << "done\n";
+    // std::cerr << "done\n";
   }
 
   void generate_meshes (Stage& stage, std::vector<vec3i>& required_chunks) {
@@ -121,27 +129,30 @@ namespace nd {
 
     for (vec3i pos : required_chunks) {
       auto chunk = stage.at_absolute (pos);
-      assert (!!chunk && !chunk->mesh);
+      // assert (!!chunk && !chunk->mesh);
 
       Array<3, ChunkData const*> adjs;
       if (!get_adjacent_chunk_datas (adjs, stage, pos))
         continue;
 
-      chunk->mesh = ChunkMesh::generate (chunk->data.get (), adjs);
+      chunk->regen_mesh (adjs);
     }
   }
 
-  extern "C" int main () try {
+  void run () {
     // subsystems
     auto host = XHost::create ();
     auto gl_ctx = GLContext::establish (host.egl_display (), host.egl_window ());
     configure_gl ();
 
+    TestChunkSource source;
+
     // persistent state
     Syncer syncer;
 
     Stage stage (9);
-    vec3i player_pos {0,0,0};
+    Camera camera (nil);
+    camera.dir = v3f{1,0,0};
 
     // transient state
     std::vector<vec3i> required_chunks;
@@ -155,19 +166,24 @@ namespace nd {
         break;
 
       // advance simulation
+      Camera old_camera = camera;
+
       syncer.update ();
       while (syncer.need_tick ()) {
         syncer.begin_tick ();
-        // ...
+        old_camera = camera;
+        camera.pos.x += 1.0f;
       }
 
+      vec3i camera_chunk = floor (camera.pos) / 16;
+
       // update stage
-      stage.relocate (player_pos, required_chunks);
-      load_chunks_into_stage (stage, required_chunks);
+      stage.relocate (camera_chunk, required_chunks);
+      load_chunks_into_stage (source, stage, required_chunks);
 
       // generate meshes
       if (!required_chunks.empty ()) {
-        auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh; };
+        auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh_ok; };
         stage.find_all_if (needs_mesh, required_chunks);
         generate_meshes (stage, required_chunks);
       }
@@ -175,22 +191,26 @@ namespace nd {
       // redraw
       for (auto idx : stage.indices ()) {
         auto chunk = stage.at_relative (idx);
-        if (!chunk || !chunk->mesh)
+        if (!chunk || !chunk->mesh_ok)
           continue;
 
         frame.add_cmesh (chunk->mesh.get (), chunk->position * vec3i {16,16,16});
       }
 
+      frame.set_camera (old_camera, camera);
+
       frame.draw (host.dims (), syncer.frame_time (), syncer.alpha ());
 
       gl_ctx.flip ();
     }
+  }
+}
 
-    return 0; // shut up clang ffs
-  }
-  catch (const std::exception& e) {
-    fprintf (stderr, "Exception!\n%s\n", e.what ());
-    return 1;
-  }
+int main () try {
+  nd::run ();
+}
+catch (std::exception const& e) {
+  std::cerr << "Exception:\n" << e.what () << "\n";
+  return 1;
 }
 

@@ -42,17 +42,19 @@ namespace nd {
     double aspect = double (dims.x) / double (dims.y);
     gluPerspective (75.0 / aspect, aspect, 0.1, 1000.0);
 
+    auto camera = lerp (old_camera, cur_camera, alpha);
+    vec3f focus = camera.pos + camera.dir;
+
     glMatrixMode (GL_MODELVIEW);
     glLoadIdentity ();
     gluLookAt (
-      0, -32, 0,
-      0, 0, 0,
-      0, 0, 1
+      camera.pos.x, camera.pos.y, camera.pos.z,
+      focus.x,      focus.y,      focus.z,
+      0,            0,            1
     );
 
     for (auto const& item : chunk_items) {
       glPushMatrix ();
-      glRotatef (time * 50.f, 0, 0, 1);
       glTranslatef (item.offset.x, item.offset.y, item.offset.z);
       item.mesh->draw ();
       glPopMatrix ();
