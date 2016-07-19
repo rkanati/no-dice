@@ -26,19 +26,18 @@ namespace nd {
       pending_release_key (0)
     { }
 
-    void handle_key (xcb_generic_event_t const* ev, InputEventQueue& out) {
-      auto kev = (xcb_key_press_event_t const*) ev;
-      bool down = (kev->response_type == XCB_KEY_PRESS);
+    void handle_key (xcb_key_press_event_t const* ev, InputEventQueue& out) {
+      bool down = (ev->response_type == XCB_KEY_PRESS);
       // auto sym = xcb_key_symbols_get_keysym (key_syms, kev->detail, 0);
 
       // ugly hack to get around Xorg's refusal to tell you anything physical about keys
       // in a consistent way. assumes evdev/hid/xkb-ish codes with the xf86-input-evdev
       // style offset.
-      auto code = (uint) kev->detail - 8;
+      auto code = (uint) ev->detail - 8;
 
       if (down) {
         // release-then-press with the same timestamp is a key repeat. ignore it.
-        if (kev->time == pending_release_time && code == pending_release_key) {
+        if (ev->time == pending_release_time && code == pending_release_key) {
           pending_release_key = 0;
         }
         else {
@@ -51,7 +50,7 @@ namespace nd {
         // defer release events for repeat detection
         flush (out);
         pending_release_key = code;
-        pending_release_time = kev->time;
+        pending_release_time = ev->time;
       }
     }
 
@@ -66,10 +65,14 @@ namespace nd {
 
   class Pointer final : public InputDevice {
   public:
-    auto handle_button (xcb_generic_event_t const* ev) {
-      auto bev = (xcb_button_press_event_t const*) ev;
-      bool down = (bev->response_type == XCB_BUTTON_PRESS);
-      return InputEvent { { this, bev->detail }, InputType::bistate, false, down };
+    auto handle_button (xcb_button_press_event_t const* ev) {
+      bool down = (ev->response_type == XCB_BUTTON_PRESS);
+      return InputEvent { { this, ev->detail }, InputType::bistate, false, down };
+    }
+
+    auto handle_motion (xcb_motion_notify_event_t const* ev) {
+      auto coords = v2i { ev->event_x, ev->event_y };
+      return InputEvent { { this, 0 }, InputType::axial_2i, false, { .value_2i = coords } };
     }
   };
 
@@ -111,14 +114,20 @@ namespace nd {
             inframe.quit = true;
         } return;
 
+        case XCB_MOTION_NOTIFY: {
+          auto out = point.handle_motion ((xcb_motion_notify_event_t const*) ev);
+          inframe.events.push_back (out);
+        } return;
+
         case XCB_BUTTON_PRESS:
         case XCB_BUTTON_RELEASE: {
-          inframe.events.push_back (point.handle_button (ev));
+          auto out = point.handle_button ((xcb_button_press_event_t const*) ev);
+          inframe.events.push_back (out);
         } return;
 
         case XCB_KEY_PRESS:
         case XCB_KEY_RELEASE: {
-          keyb.handle_key (ev, inframe.events);
+          keyb.handle_key ((xcb_key_press_event_t const*) ev, inframe.events);
         } return;
 
         default:;
@@ -189,7 +198,6 @@ namespace nd {
       XCB_EVENT_MASK_BUTTON_PRESS
       | XCB_EVENT_MASK_BUTTON_RELEASE
       | XCB_EVENT_MASK_POINTER_MOTION
-      | XCB_EVENT_MASK_BUTTON_MOTION
       | XCB_EVENT_MASK_KEY_PRESS
       | XCB_EVENT_MASK_KEY_RELEASE
     };

@@ -152,8 +152,13 @@ namespace nd {
     Syncer syncer;
 
     Stage stage (9);
+
     Camera camera (nil);
-    camera.dir = v3f{1,0,0};
+    versf camera_yaw (identity);
+    float camera_pitch = 0.0f;
+
+    v2f mouse_prev (nil);
+    bool mouse_look = false;
 
     bool x_posve_go = false,
          x_negve_go = false,
@@ -171,6 +176,8 @@ namespace nd {
       if (input.quit)
         break;
 
+      v2i mouse_delta {0,0};
+
       for (auto const& ev : input.events) {
         if (ev.cause.device == host->keyboard ()) {
           switch ((Key) ev.cause.index) {
@@ -182,6 +189,13 @@ namespace nd {
           }
         }
         else if (ev.cause.device == host->pointer ()) {
+          if (ev.type == InputType::axial_2i) {
+            mouse_delta += ev.value_2i - mouse_prev;
+            mouse_prev = ev.value_2i;
+          }
+          else if (ev.type == InputType::bistate) {
+            mouse_look = ev.state;
+          }
         }
       }
 
@@ -198,6 +212,17 @@ namespace nd {
       }
 
       camera_move = unit (camera_move);
+
+      if (mouse_look) {
+        v2f camera_rotate = mouse_delta * 0.002f;
+        camera_yaw = rotation (-camera_rotate.x, v3f{0,0,1}) * camera_yaw;
+        camera_pitch += camera_rotate.y;
+        camera_pitch = std::min (std::max (camera_pitch, -1.5f), 1.5f);
+
+        camera.ori = camera_yaw * rotation (camera_pitch, v3f{0,1,0});
+      }
+
+      camera_move = conj (camera.ori, camera_move);
 
       // advance simulation
       Camera old_camera = camera;

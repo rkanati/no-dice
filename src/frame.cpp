@@ -43,7 +43,8 @@ namespace nd {
     gluPerspective (75.0 / aspect, aspect, 0.1, 1000.0);
 
     auto camera = lerp (old_camera, cur_camera, alpha);
-    vec3f focus = camera.pos + camera.dir;
+    v3f dir = conj (camera.ori, v3f{1,0,0});
+    vec3f focus = camera.pos + dir;
 
     glMatrixMode (GL_MODELVIEW);
     glLoadIdentity ();

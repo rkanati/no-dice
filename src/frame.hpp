@@ -3,29 +3,31 @@
 
 #include "types.hpp"
 #include "vector.hpp"
+#include "versor.hpp"
 #include "chunk-mesh.hpp"
 
 #include <vector>
 
 namespace nd {
   struct Camera {
-    v3f pos, dir;
+    v3f   pos;
+    versf ori;
 
     Camera () = default;
 
     Camera (nil_t) :
-      pos (nil), dir (nil)
+      pos (nil), ori (identity)
     { }
 
-    Camera (v3f pos, v3f dir) :
-      pos (pos), dir (dir)
+    Camera (v3f pos, versf ori) :
+      pos (pos), ori (ori)
     { }
   };
 
   static Camera lerp (Camera const& from, Camera const& to, float alpha) {
     return {
       lerp (from.pos, to.pos, alpha),
-      lerp (from.dir, to.dir, alpha)
+      lerp (from.ori, to.ori, alpha)
     };
   }
 
