@@ -13,7 +13,7 @@
 #include "stage.hpp"
 #include "syncer.hpp"
 #include "stage-chunk.hpp"
-#include "chunk-source.hpp"
+#include "test-chunk-source.hpp"
 #include "key.hpp"
 
 #include <cstdlib>
@@ -37,40 +37,6 @@ namespace nd {
     glEnableClientState (GL_VERTEX_ARRAY);
     glEnableClientState (GL_COLOR_ARRAY);
   }
-
-  auto make_test_chunkdata () {
-    ChunkData chunk;
-    for (auto i : chunk.indices ()) {
-      int const a = i.z + 1,
-                b = 15 - i.z;
-      bool const empty = (i.x < a || i.x > b || i.y < a || i.y > b);
-      chunk[i] = empty? 0 : 1;
-    }
-    return std::make_shared<ChunkData> (chunk);
-  }
-
-  auto make_blank_chunkdata () {
-    ChunkData blank;
-    for (auto i : blank.indices ())
-      blank[i] = 0;
-    return std::make_shared<ChunkData> (blank);
-  }
-
-  class TestChunkSource final : public ChunkSource {
-    ChunkData::Shared test_chunk = make_test_chunkdata (),
-                      blank_chunk = make_blank_chunkdata ();
-
-  public:
-    ChunkData::Shared get (vec3i pos) override {
-      if (pos.z == -1 && (pos.x % 2 == 0) && (pos.y % 2 == 0))
-        return test_chunk;
-      else
-        return blank_chunk;
-    }
-
-    void store (vec3i, ChunkData::Shared)
-    { }
-  };
 
   auto load_chunk (ChunkSource& source, vec3i pos) -> StageChunk {
     return StageChunk (source.get (pos), pos);
@@ -110,18 +76,12 @@ namespace nd {
     if (required_chunks.empty ())
       return;
 
-    // std::cerr << "generating chunks... ";
-
     for (vec3i chunk_pos : required_chunks) {
-      // std::cerr << chunk_pos << " ";
-
       // load or generate chunk at chunk_pos
       auto chunk = load_chunk (source, chunk_pos);
 
       stage.insert (std::move (chunk), chunk_pos);
     }
-
-    // std::cerr << "done\n";
   }
 
   void generate_meshes (Stage& stage, std::vector<vec3i>& required_chunks) {
@@ -146,12 +106,12 @@ namespace nd {
     auto gl_ctx = GLContext::establish (host->egl_display (), host->egl_window ());
     configure_gl ();
 
-    TestChunkSource source;
+    auto source = make_test_chunk_source ();
 
     // persistent state
     Syncer syncer;
 
-    Stage stage (9);
+    Stage stage (15);
 
     Camera camera (nil);
     versf camera_yaw (identity);
@@ -238,7 +198,7 @@ namespace nd {
 
       // update stage
       stage.relocate (camera_chunk, required_chunks);
-      load_chunks_into_stage (source, stage, required_chunks);
+      load_chunks_into_stage (*source, stage, required_chunks);
 
       // generate meshes
       if (!required_chunks.empty ()) {

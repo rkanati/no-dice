@@ -13,7 +13,10 @@ namespace nd {
   struct ChunkData {
     using Shared = SharePtr<ChunkData>;
 
-    Block blocks [16][16][16];
+    union {
+      Block blocks [16][16][16];
+      Block flat [16 * 16 * 16];
+    };
 
     Block& operator[] (v3i i) {
       return blocks[i.x][i.y][i.z];

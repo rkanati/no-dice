@@ -1,7 +1,9 @@
 Makefile
-debug/
 obj/
+debug/
 release/
+profile/
+gmon.out
 *.make
 *.swp
 *~

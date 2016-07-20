@@ -4,13 +4,15 @@
 
 #include "chunk-mesh.hpp"
 
+#include "vector.hpp"
+
 #include <vector>
 
 #include <GL/gl.h>
 
 namespace nd {
   struct Vertex {
-    float r, g, b, x, y, z;
+    v3f rgb, xyz;
   };
 
   class ChunkMeshImpl final : public ChunkMesh {
@@ -49,44 +51,48 @@ namespace nd {
 
           Block current = chunk->blocks [x][y][z];
 
+          static v3f const xcol { 0.8f, 0.8f, 0.8f },
+                           ycol { 0.5f, 0.5f, 0.5f },
+                           zcol { 1.0f, 1.0f, 1.0f };
+
           if (current != 0) { // face out
             if (xadj [(x+1)%16][y][z] == 0) { // +x
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { xcol, v3f { x+1.f, y+0.f, z+0.f } });
+              arrays.push_back (Vertex { xcol, v3f { x+1.f, y+1.f, z+0.f } });
+              arrays.push_back (Vertex { xcol, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { xcol, v3f { x+1.f, y+0.f, z+1.f } });
             }
             if (yadj [x][(y+1)%16][z] == 0) { // +y
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { ycol, v3f { x+0.f, y+1.f, z+0.f } });
+              arrays.push_back (Vertex { ycol, v3f { x+0.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { ycol, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { ycol, v3f { x+1.f, y+1.f, z+0.f } });
             }
             if (zadj [x][y][(z+1)%16] == 0) { // +z
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { zcol, v3f { x+0.f, y+0.f, z+1.f } });
+              arrays.push_back (Vertex { zcol, v3f { x+1.f, y+0.f, z+1.f } });
+              arrays.push_back (Vertex { zcol, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { zcol, v3f { x+0.f, y+1.f, z+1.f } });
             }
           }
           else if (current == 0) { // face in
             if (xadj [(x+1)%16][y][z] != 0) { // +x
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+0.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+0.f, z+1.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 1.0f, 0.4f, 0.7f, x+1.f, y+1.f, z+0.f });
+              arrays.push_back (Vertex { xcol * 0.5f, v3f { x+1.f, y+0.f, z+0.f } });
+              arrays.push_back (Vertex { xcol * 0.5f, v3f { x+1.f, y+0.f, z+1.f } });
+              arrays.push_back (Vertex { xcol * 0.5f, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { xcol * 0.5f, v3f { x+1.f, y+1.f, z+0.f } });
             }
             if (yadj [x][(y+1)%16][z] != 0) { // +y
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+0.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+0.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.2f, 0.7f, 0.5f, x+0.f, y+1.f, z+1.f });
+              arrays.push_back (Vertex { ycol * 0.5f, v3f { x+0.f, y+1.f, z+0.f } });
+              arrays.push_back (Vertex { ycol * 0.5f, v3f { x+1.f, y+1.f, z+0.f } });
+              arrays.push_back (Vertex { ycol * 0.5f, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { ycol * 0.5f, v3f { x+0.f, y+1.f, z+1.f } });
             }
             if (zadj [x][y][(z+1)%16] != 0) { // +z
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+0.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+0.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+1.f, z+1.f });
-              arrays.push_back (Vertex { 0.0f, 0.0f, 0.8f, x+1.f, y+0.f, z+1.f });
+              arrays.push_back (Vertex { zcol * 0.5f, v3f { x+0.f, y+0.f, z+1.f } });
+              arrays.push_back (Vertex { zcol * 0.5f, v3f { x+0.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { zcol * 0.5f, v3f { x+1.f, y+1.f, z+1.f } });
+              arrays.push_back (Vertex { zcol * 0.5f, v3f { x+1.f, y+0.f, z+1.f } });
             }
           }
         }
