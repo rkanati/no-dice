@@ -10,15 +10,17 @@ namespace nd {
 
   public:
     CoordHasher (u32 const seed);
+    CoordHasher (CoordHasher const&) = delete;
 
-    u8 hash_coords (v3i const coords) const {
-      auto v = Rk::vector3<u8> { (u8) coords.x, (u8) coords.y, (u8) coords.z };
-      return perm[perm[perm[v.x] + v.y] + v.z];
+    u8 hash_coords (v3i const v) const {
+      u8 hx = perm [u8 (v.x)];
+      u8 hy = perm [u8 (hx + v.y)];
+      return perm [u8 (hy + v.z)];
     }
 
     u8 hash_coords (v2i const coords) const {
-      auto v = Rk::vector2<u8> { (u8) coords.x, (u8) coords.y };
-      return perm[perm[v.x] + v.y];
+      u8 hx = perm [u8 (v.x)];
+      return perm [u8 (hx + v.y)];
     }
 
     template<uint n>

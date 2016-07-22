@@ -42,14 +42,14 @@ namespace nd {
     missing.clear ();
     for (auto rel : indices ()) {
       vec3i correct_pos = abs_for_rel (rel);
-      auto& chunk = chunk_at (index_rel (rel));
+      auto& chunk = chunk_at (index_abs (correct_pos));
       if (!chunk || chunk.position != correct_pos)
         missing.push_back (correct_pos);
     }
   }
 
-  void Stage::insert (StageChunk chunk, vec3i pos) {
-    auto& element = chunk_at (index_abs (pos));
+  void Stage::insert (StageChunk chunk) {
+    auto& element = chunk_at (index_abs (chunk.position));
     element = std::move (chunk);
   }
 
@@ -59,14 +59,14 @@ namespace nd {
     else return &cell;
   }
 
+  auto Stage::at_relative (vec3i off) const -> StageChunk const* {
+    return at_absolute (abs_for_rel (off));
+  }
+
   auto Stage::at_absolute (vec3i pos) -> StageChunk* {
     auto& cell = chunk_at (index_abs (pos));
     if (!cell || cell.position != pos) return nullptr;
     else return &cell;
-  }
-
-  auto Stage::at_relative (vec3i off) const -> StageChunk const* {
-    return at_absolute (abs_for_rel (off));
   }
 
   auto Stage::at_relative (vec3i off) -> StageChunk* {

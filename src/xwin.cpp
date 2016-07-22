@@ -23,7 +23,8 @@ namespace nd {
 
   public:
     Keyboard () :
-      pending_release_key (0)
+      pending_release_key  (0),
+      pending_release_time (0)
     { }
 
     void handle_key (xcb_key_press_event_t const* ev, InputEventQueue& out) {

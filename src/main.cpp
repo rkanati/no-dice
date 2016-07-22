@@ -32,14 +32,11 @@
 
 namespace nd {
   void configure_gl () {
+    glEnable (GL_MULTISAMPLE);
     glEnable (GL_CULL_FACE);
     glEnable (GL_DEPTH_TEST);
     glEnableClientState (GL_VERTEX_ARRAY);
     glEnableClientState (GL_COLOR_ARRAY);
-  }
-
-  auto load_chunk (ChunkSource& source, vec3i pos) -> StageChunk {
-    return StageChunk (source.get (pos), pos);
   }
 
   bool get_adjacent_chunk_datas (
@@ -47,7 +44,8 @@ namespace nd {
     Stage const& stage,
     vec3i const pos)
   {
-    static auto const offsets = Array<3, vec3i> {{ v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1} }};
+    static v3i const offsets[] = { v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1} };
+
     for (auto i = 0; i != 3; i++) {
       auto adj_chunk = stage.at_absolute (pos + offsets[i]);
       if (!adj_chunk) return false;
@@ -68,29 +66,9 @@ namespace nd {
     return os << ")";
   }
 
-  void load_chunks_into_stage (
-    ChunkSource& source,
-    Stage& stage,
-    std::vector<vec3i>& required_chunks
-  ) {
-    if (required_chunks.empty ())
-      return;
-
-    for (vec3i chunk_pos : required_chunks) {
-      // load or generate chunk at chunk_pos
-      auto chunk = load_chunk (source, chunk_pos);
-
-      stage.insert (std::move (chunk), chunk_pos);
-    }
-  }
-
-  void generate_meshes (Stage& stage, std::vector<vec3i>& required_chunks) {
-    if (required_chunks.empty ())
-      return;
-
+  void generate_meshes (Stage& stage, std::vector<vec3i> const& required_chunks) {
     for (vec3i pos : required_chunks) {
       auto chunk = stage.at_absolute (pos);
-      // assert (!!chunk && !chunk->mesh);
 
       Array<3, ChunkData const*> adjs;
       if (!get_adjacent_chunk_datas (adjs, stage, pos))
@@ -111,9 +89,9 @@ namespace nd {
     // persistent state
     Syncer syncer;
 
-    Stage stage (15);
+    Stage stage (13);
 
-    Camera camera (nil);
+    Camera camera (v3f {200.0f, -300.0f, 50.f}, identity);
     versf camera_yaw (identity);
     float camera_pitch = 0.0f;
 
@@ -198,14 +176,17 @@ namespace nd {
 
       // update stage
       stage.relocate (camera_chunk, required_chunks);
-      load_chunks_into_stage (*source, stage, required_chunks);
+
+      // load or generate chunks
+      for (vec3i chunk_pos : required_chunks) {
+        auto data = source->get (chunk_pos);
+        stage.insert (StageChunk (std::move (data), chunk_pos));
+      }
 
       // generate meshes
-      if (!required_chunks.empty ()) {
-        auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh_ok; };
-        stage.find_all_if (needs_mesh, required_chunks);
-        generate_meshes (stage, required_chunks);
-      }
+      auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh_ok; };
+      stage.find_all_if (needs_mesh, required_chunks);
+      generate_meshes (stage, required_chunks);
 
       // redraw
       for (auto idx : stage.indices ()) {

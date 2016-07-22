@@ -104,7 +104,7 @@ namespace nd {
       value += coeff * contrib;
     }
 
-    return value;
+    return 0.5f + value * 0.5f;
   }
 
   float perlin (CoordHasher const& hasher, v2f pos) {

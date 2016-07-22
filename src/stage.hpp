@@ -26,7 +26,7 @@ namespace nd {
     int index_abs (vec3i pos) const;
     int index_rel (vec3i rel) const;
 
-    StageChunk& chunk_at (int index);
+    StageChunk&       chunk_at (int index);
     StageChunk const& chunk_at (int index) const;
 
   public:
@@ -43,11 +43,11 @@ namespace nd {
     }
 
     vec3i mins () const {
-      return -maxs ();
+      return -maxs () + v3i{1,1,1};
     }
 
     auto indices () const {
-      return vec_range (mins (), maxs ());
+      return vec_range (mins (), maxs () + v3i{1,1,1});
     }
 
     void relocate (vec3i new_centre, std::vector<vec3i>& missing);
@@ -66,7 +66,7 @@ namespace nd {
       }
     }
 
-    void insert (StageChunk chunk, vec3i pos);
+    void insert (StageChunk chunk);
 
     auto at_absolute (vec3i pos) const -> StageChunk const*;
     auto at_relative (vec3i off) const -> StageChunk const*;

@@ -29,6 +29,8 @@ namespace nd {
       EGL_DEPTH_SIZE,        24,
       EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
       EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
+      EGL_SAMPLE_BUFFERS,    1,
+      EGL_SAMPLES,           4,
       EGL_NONE
     };
 

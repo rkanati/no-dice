@@ -36,7 +36,7 @@ namespace nd {
                                  full_chunk  = make_full_chunkdata ();
 
       static int const bedrock = -10,
-                       peaks   =   5;
+                       peaks   =   0;
 
       if (pos.z < bedrock) {
         return full_chunk;
@@ -48,7 +48,7 @@ namespace nd {
         ChunkData chunk;
 
         for (auto i : chunk.indices ()) {
-          float noise_value = 0.5f + perlin (hasher, 0.25f * (pos + i * 0.0625f)) * 0.5f;
+          float noise_value = perlin (hasher, 0.25f * pos + i * 0.015625f);
           auto alt = ((pos.z - bedrock) * 16 + i.z) / (16.0f * (peaks - bedrock));
           float alt_value = 1.0f - alt;
           float interp = 2.0f * (alt - 0.5f);
@@ -66,7 +66,7 @@ namespace nd {
   };
 
   SharePtr<ChunkSource> make_test_chunk_source () {
-    return share (TestChunkSource { });
+    return std::make_shared<TestChunkSource> ();
   }
 }
 
