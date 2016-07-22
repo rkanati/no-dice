@@ -6,6 +6,7 @@
 #include "types.hpp"
 
 #include <random>
+#include <utility>
 #include <algorithm>
 #include <functional>
 
@@ -18,118 +19,132 @@ namespace nd {
   }
 
   namespace {
-    v3f gradient (u8 hash) {
-      static v3f const grads[16] = {
-        v3f {  1,  1,  0 },
-        v3f { -1,  1,  0 },
-        v3f {  1, -1,  0 },
-        v3f { -1, -1,  0 },
-        v3f {  1,  0,  1 },
-        v3f { -1,  0,  1 },
-        v3f {  1,  0, -1 },
-        v3f { -1,  0, -1 },
-        v3f {  0,  1,  1 },
-        v3f {  0, -1,  1 },
-        v3f {  0,  1, -1 },
-        v3f {  0, -1, -1 },
-        v3f {  1,  1,  0 },
-        v3f { -1,  0,  1 },
-        v3f {  0, -1, -1 },
-        v3f {  1,  0, -1 }
-      };
+    template<uint n>
+    struct Constants;
 
-      auto h = hash & 0xf;
-      return grads[h];
-    }
-
-    auto grads_2d () -> Array<16, v2f> {
-      Array<16, v2f> grads;
-      float twopi = 6.28318530718f;
-      float frac = 1.0f / 16.0f;
-      for (uint i = 0; i != 16; i++) {
-        float const theta = twopi * i * frac;
-        grads[i] = v2f { std::cos (theta), std::sin (theta) };
+    template<>
+    struct Constants<3> {
+      static constexpr auto grads () -> Array<16, v3f> {
+        return {
+          v3f { 1,  1,  0},
+          v3f {-1,  1,  0},
+          v3f { 1, -1,  0},
+          v3f {-1, -1,  0},
+          v3f { 1,  0,  1},
+          v3f {-1,  0,  1},
+          v3f { 1,  0, -1},
+          v3f {-1,  0, -1},
+          v3f { 0,  1,  1},
+          v3f { 0, -1,  1},
+          v3f { 0,  1, -1},
+          v3f { 0, -1, -1},
+          v3f { 1,  1,  0},
+          v3f {-1,  0,  1},
+          v3f { 0, -1, -1},
+          v3f { 1,  0, -1}
+        };
       }
-      return grads;
+
+      static constexpr auto corners () -> Array<8, v3i> {
+        return {
+          v3i {0, 0, 0},
+          v3i {0, 0, 1},
+          v3i {0, 1, 0},
+          v3i {0, 1, 1},
+          v3i {1, 0, 0},
+          v3i {1, 0, 1},
+          v3i {1, 1, 0},
+          v3i {1, 1, 1}
+        };
+      }
+    };
+
+    template<int... is>
+    constexpr auto grads_2d (std::integer_sequence<int, is...>) {
+      float const twopi = 6.28318530718f;
+      float const frac = 1.0f / 16.0f;
+      return Array<sizeof... (is), v2f> {
+        v2f { std::cos (twopi * is * frac), std::sin (twopi * is * frac) }
+        ...
+      };
     }
 
-    float contribution (u8 hash, v2f v) {
-      static Array<16, v2f> const grads = grads_2d ();
-      return dot (v, grads[hash & 0xf]);
+    template<>
+    struct Constants<2> {
+      static constexpr auto grads () {
+        return grads_2d (std::make_integer_sequence<int, 16> { });
+      }
+
+      static constexpr auto corners () -> Array<4, v2i> {
+        return {
+          v2i {0, 0},
+          v2i {0, 1},
+          v2i {1, 0},
+          v2i {1, 1}
+        };
+      }
+    };
+
+    template<uint i>
+    auto gradient (u8 hash) {
+      static constexpr auto const grads = Constants<i>::grads ();
+      return grads[hash & 0xf];
     }
 
     float ease (float t) {
       return t * t * t * ((6 * t - 15) * t + 10);
     }
-  }
 
-  float perlin (CoordHasher const& hasher, v3f pos) {
-    using Rk::lerp;
+    template<uint n, typename T>
+    vector<n, T> ones;
 
-    // break into cell and relative (integer and fraction)
-    v3i const cell = floor (pos);
-    v3f const rel = pos - cell;
+    template<typename T>
+    auto ones<2, T> = vector2<T> {1,1};
 
-    // apply s-curve to smooth boundaries
-    v3f const smoothing = transform (ease, rel),
-              inv_smoothing = v3f{1,1,1} - smoothing;
+    template<typename T>
+    auto ones<3, T> = vector3<T> {1,1,1};
 
-    // offsets of cell corners
-    static Rk::vector3<u8> const corners[8] = {
-      v3i {0, 0, 0},
-      v3i {0, 0, 1},
-      v3i {0, 1, 0},
-      v3i {0, 1, 1},
-      v3i {1, 0, 0},
-      v3i {1, 0, 1},
-      v3i {1, 1, 0},
-      v3i {1, 1, 1}
-    };
+    template<uint n>
+    float perlin_impl (CoordHasher const& hasher, vectorf<n> pos) {
+      // break into cell and relative (integer and fraction)
+      vectori<n> const cell = floor (pos);
+      auto const rel = pos - cell;
 
-    float value = 0.0f;
-    for (auto i = 0; i != 8; i++) {
-      v3i corner = corners[i],
-          inv_corner = v3i{1,1,1} - corner;
+      // apply s-curve to smooth boundaries
+      auto const smoothing = transform (ease, rel),
+                 inv_smoothing = ones<n, float> - smoothing;
 
-      // smoothed contribution coefficient for this corner
-      v3f coeffs = inv_corner * inv_smoothing + corner * smoothing;
-      float coeff = coeffs.x * coeffs.y * coeffs.z;
+      // offsets of cell corners
+      static constexpr auto const corners = Constants<n>::corners ();
 
-      // get gradient for this corner
-      u8 hash = hasher (cell + corner);
-      v3f grad = gradient (hash);
+      float value = 0.0f;
+      for (auto i = 0; i != 8; i++) {
+        auto corner = corners[i],
+             inv_corner = ones<n, int> - corner;
 
-      // add contribution
-      float contrib = dot (grad, rel - corner);
-      value += coeff * contrib;
+        // smoothed contribution coefficient for this corner
+        auto coeffs = inv_corner * inv_smoothing + corner * smoothing;
+        float coeff = reduce (std::multiplies<> { }, coeffs);
+
+        // get gradient for this corner
+        u8 hash = hasher (cell + corner);
+        auto grad = gradient<n> (hash);
+
+        // add contribution
+        float contrib = dot (grad, rel - corner);
+        value += coeff * contrib;
+      }
+
+      return 0.5f + value * 0.5f;
     }
-
-    return 0.5f + value * 0.5f;
   }
 
   float perlin (CoordHasher const& hasher, v2f pos) {
-    using Rk::lerp;
+    return perlin_impl (hasher, pos);
+  }
 
-    v2i const cell = floor (pos);
-    v2f const rel  = pos - cell;
-
-    auto const interp = transform (ease, rel);
-
-    static v2i const offsets [4] = {
-      v2i {0, 0},
-      v2i {0, 1},
-      v2i {1, 0},
-      v2i {1, 1}
-    };
-
-    float contribs [4];
-    for (uint i = 0; i != 4; i++)
-      contribs[i] = contribution (hasher (cell + offsets[i]), rel - offsets[i]);
-
-    for (uint i = 0; i != 2; i++)
-      contribs[i*2] = lerp (contribs[i*2], contribs[i*2+1], interp.y);
-
-    return lerp (contribs[0], contribs[2], interp.x);
+  float perlin (CoordHasher const& hasher, v3f pos) {
+    return perlin_impl (hasher, pos);
   }
 }
 

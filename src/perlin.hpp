@@ -18,7 +18,7 @@ namespace nd {
       return perm [u8 (hy + v.z)];
     }
 
-    u8 hash_coords (v2i const coords) const {
+    u8 hash_coords (v2i const v) const {
       u8 hx = perm [u8 (v.x)];
       return perm [u8 (hx + v.y)];
     }

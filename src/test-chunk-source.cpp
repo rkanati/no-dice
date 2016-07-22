@@ -48,7 +48,7 @@ namespace nd {
         ChunkData chunk;
 
         for (auto i : chunk.indices ()) {
-          float noise_value = perlin (hasher, 0.25f * pos + i * 0.015625f);
+          float noise_value = perlin (hasher, 0.25f * (pos + i * 0.0625f));
           auto alt = ((pos.z - bedrock) * 16 + i.z) / (16.0f * (peaks - bedrock));
           float alt_value = 1.0f - alt;
           float interp = 2.0f * (alt - 0.5f);
