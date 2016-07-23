@@ -29,7 +29,7 @@ namespace nd {
     }
   };
 
-  float perlin (CoordHasher const& hasher, v3f pos);
-  float perlin (CoordHasher const& hasher, v2f pos);
+  float perlin (CoordHasher const& hasher, v3f pos, int wrap = 0);
+  float perlin (CoordHasher const& hasher, v2f pos, int wrap = 0);
 }
 

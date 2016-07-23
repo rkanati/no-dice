@@ -12,6 +12,8 @@ namespace nd {
     glViewport (0, 0, dims.x, dims.y);
     glClear (GL_DEPTH_BUFFER_BIT);
 
+    glDisable (GL_TEXTURE_2D);
+
     // background
     glPolygonMode (GL_FRONT, GL_FILL);
 
@@ -24,11 +26,14 @@ namespace nd {
     glDisable (GL_DEPTH_TEST);
     glDepthMask (GL_FALSE);
 
+    v3f sky_top    {0.10f, 0.25f, 0.70f},
+        sky_bottom {0.25f, 0.35f, 0.90f};
+
     glBegin (GL_QUADS);
-      glColor3f (0.00, 0.00, 0.13); glVertex2f (-1, -1);
-      glColor3f (0.00, 0.00, 0.13); glVertex2f ( 1, -1);
-      glColor3f (0.13, 0.03, 0.08); glVertex2f ( 1,  1);
-      glColor3f (0.13, 0.03, 0.08); glVertex2f (-1,  1);
+      glColor3fv (sky_top.begin ());    glVertex2f (-1, -1);
+      glColor3fv (sky_top.begin ());    glVertex2f ( 1, -1);
+      glColor3fv (sky_bottom.begin ()); glVertex2f ( 1,  1);
+      glColor3fv (sky_bottom.begin ()); glVertex2f (-1,  1);
     glEnd ();
 
     // foreground
@@ -54,6 +59,7 @@ namespace nd {
       0,            0,            1
     );
 
+    glEnable (GL_TEXTURE_2D);
     for (auto const& item : chunk_items) {
       glPushMatrix ();
       glTranslatef (item.offset.x, item.offset.y, item.offset.z);

@@ -5,6 +5,7 @@
 #include "perlin.hpp"
 #include "types.hpp"
 
+#include <limits>
 #include <random>
 #include <utility>
 #include <algorithm>
@@ -64,7 +65,7 @@ namespace nd {
       float const twopi = 6.28318530718f;
       float const frac = 1.0f / 16.0f;
       return Array<sizeof... (is), v2f> {
-        v2f { std::cos (twopi * is * frac), std::sin (twopi * is * frac) }
+        v2f { 1.414f * std::cos (twopi * is * frac), 1.414f * std::sin (twopi * is * frac) }
         ...
       };
     }
@@ -105,10 +106,14 @@ namespace nd {
     auto ones<3, T> = vector3<T> {1,1,1};
 
     template<uint n>
-    float perlin_impl (CoordHasher const& hasher, vectorf<n> pos) {
+    float perlin_impl (CoordHasher const& hasher, vectorf<n> pos, int wrap) {
+      if (wrap < 1)
+        wrap = (std::numeric_limits<int>::max () / 2) + 1;
+
       // break into cell and relative (integer and fraction)
-      vectori<n> const cell = floor (pos);
+      vectori<n> cell = floor (pos);
       auto const rel = pos - cell;
+      cell %= wrap;
 
       // apply s-curve to smooth boundaries
       auto const smoothing = transform (ease, rel),
@@ -118,7 +123,7 @@ namespace nd {
       static constexpr auto const corners = Constants<n>::corners ();
 
       float value = 0.0f;
-      for (auto i = 0; i != 8; i++) {
+      for (auto i = 0; i != corners.size (); i++) {
         auto corner = corners[i],
              inv_corner = ones<n, int> - corner;
 
@@ -127,7 +132,7 @@ namespace nd {
         float coeff = reduce (std::multiplies<> { }, coeffs);
 
         // get gradient for this corner
-        u8 hash = hasher (cell + corner);
+        u8 hash = hasher ((cell + corner) % wrap);
         auto grad = gradient<n> (hash);
 
         // add contribution
@@ -139,12 +144,12 @@ namespace nd {
     }
   }
 
-  float perlin (CoordHasher const& hasher, v2f pos) {
-    return perlin_impl (hasher, pos);
+  float perlin (CoordHasher const& hasher, v2f pos, int mask) {
+    return perlin_impl (hasher, pos, mask);
   }
 
-  float perlin (CoordHasher const& hasher, v3f pos) {
-    return perlin_impl (hasher, pos);
+  float perlin (CoordHasher const& hasher, v3f pos, int mask) {
+    return perlin_impl (hasher, pos, mask);
   }
 }
 

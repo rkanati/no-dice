@@ -16,6 +16,7 @@ namespace nd {
   class Stage {
   private:
     int const         dim;
+    v3i const         strides;
     StageChunk* const chunks;
     vec3i             centre;
 
@@ -23,11 +24,25 @@ namespace nd {
       return rel + centre;
     }
 
-    int index_abs (vec3i pos) const;
-    int index_rel (vec3i rel) const;
+    int index_abs (vec3i pos) const {
+      auto ijk = (pos % dim + v3i{dim,dim,dim}) % dim;
+      // if (ijk.x < 0) ijk.x += dim;
+      // if (ijk.y < 0) ijk.y += dim;
+      // if (ijk.z < 0) ijk.z += dim;
+      return dot (ijk, strides);
+    }
 
-    StageChunk&       chunk_at (int index);
-    StageChunk const& chunk_at (int index) const;
+    int index_rel (vec3i rel) const {
+      return index_abs (abs_for_rel (rel));
+    }
+
+    StageChunk& chunk_at (int index) {
+      return chunks [index];
+    }
+
+    StageChunk const& chunk_at (int index) const {
+      return chunks [index];
+    }
 
   public:
     Stage (unsigned radius);
@@ -66,13 +81,30 @@ namespace nd {
       }
     }
 
-    void insert (StageChunk chunk);
+    void insert (StageChunk chunk) {
+      auto& element = chunk_at (index_abs (chunk.position));
+      element = std::move (chunk);
+    }
 
-    auto at_absolute (vec3i pos) const -> StageChunk const*;
-    auto at_relative (vec3i off) const -> StageChunk const*;
+    auto at_absolute (vec3i pos) const -> StageChunk const* {
+      auto const& cell = chunk_at (index_abs (pos));
+      if (!cell || cell.position != pos) return nullptr;
+      else return &cell;
+    }
 
-    auto at_absolute (vec3i pos) -> StageChunk*;
-    auto at_relative (vec3i off) -> StageChunk*;
+    auto at_relative (vec3i off) const -> StageChunk const* {
+      return at_absolute (abs_for_rel (off));
+    }
+
+    auto at_absolute (vec3i pos) -> StageChunk* {
+      auto& cell = chunk_at (index_abs (pos));
+      if (!cell || cell.position != pos) return nullptr;
+      else return &cell;
+    }
+
+    auto at_relative (vec3i off) -> StageChunk* {
+      return at_absolute (abs_for_rel (off));
+    }
   };
 }
 

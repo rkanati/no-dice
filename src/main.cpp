@@ -31,12 +31,16 @@
 #include <GL/glu.h>
 
 namespace nd {
+  uint make_test_texture ();
+
   void configure_gl () {
+    glShadeModel (GL_SMOOTH);
     glEnable (GL_MULTISAMPLE);
     glEnable (GL_CULL_FACE);
     glEnable (GL_DEPTH_TEST);
     glEnableClientState (GL_VERTEX_ARRAY);
     glEnableClientState (GL_COLOR_ARRAY);
+    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
   }
 
   bool get_adjacent_chunk_datas (
@@ -86,12 +90,17 @@ namespace nd {
 
     auto source = make_test_chunk_source ();
 
+    // parameters
+#ifndef NDEBUG
+    auto const stage_radius = 9;
+#else
+    auto const stage_radius = 25;
+#endif
+
     // persistent state
     Syncer syncer;
-
-    Stage stage (13);
-
-    Camera camera (v3f {200.0f, -300.0f, 50.f}, identity);
+    Stage stage (stage_radius);
+    Camera camera (v3f {0.0f, 0.0f, 20.f}, identity);
     versf camera_yaw (identity);
     float camera_pitch = 0.0f;
 
@@ -106,6 +115,9 @@ namespace nd {
     // transient state
     std::vector<vec3i> required_chunks;
     Frame frame;
+
+    // test texture
+    uint tex = make_test_texture ();
 
     // main loop
     while (true) {
@@ -176,11 +188,29 @@ namespace nd {
 
       // update stage
       stage.relocate (camera_chunk, required_chunks);
+      std::sort (
+        required_chunks.begin (), required_chunks.end (),
+        [camera_chunk] (v3i lhs, v3i rhs) {
+          return abs2 (lhs-camera_chunk) < abs2 (rhs-camera_chunk);
+        }
+      );
+
+      auto cull = std::find_if (
+        required_chunks.begin (), required_chunks.end (),
+        [camera_chunk] (v3i pos) {
+          return abs2 (pos-camera_chunk) >= stage_radius * stage_radius;
+        }
+      );
+
+      required_chunks.erase (cull, required_chunks.end ());
 
       // load or generate chunks
+      int n = 100;
       for (vec3i chunk_pos : required_chunks) {
         auto data = source->get (chunk_pos);
         stage.insert (StageChunk (std::move (data), chunk_pos));
+        if (n-- == 0)
+          break;
       }
 
       // generate meshes
@@ -199,8 +229,8 @@ namespace nd {
 
       frame.set_camera (old_camera, camera);
 
+      glBindTexture (GL_TEXTURE_2D, tex);
       frame.draw (host->dims (), syncer.frame_time (), syncer.alpha ());
-
       gl_ctx.flip ();
     }
   }
