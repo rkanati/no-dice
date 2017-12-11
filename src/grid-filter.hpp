@@ -1,8 +1,10 @@
 //
 // no-dice
 //
+#pragma once
 
 #include "vector.hpp"
+#include "smooth.hpp"
 
 namespace nd {
   namespace detail {
@@ -66,7 +68,7 @@ namespace nd {
     template<typename Fn>
     static GridSamples take (vectorf<n> start, float step, Fn fn) {
       GridSamples gs;
-      for (auto i : vec_range (Rk::zero_vector<n, int>, Rk::make_diagonal<n> (dim+1)))
+      for (auto i : vec_range (Rk::zero_vector<n, int>, Rk::diag<n> (dim+1)))
         gs[i] = fn (start + (step/dim)*i);
       return gs;
     }
@@ -93,8 +95,7 @@ namespace nd {
 
     pos *= dim;
     vectori<n> const cell = floor (pos);
-    vectorf<n> const rel = pos - cell;
-    vectorf<n> const smooth = transform (interp, rel);
+    vectorf<n> const smooth = transform (interp, pos - cell);
 
     static constexpr auto const corners = make_corners<n> ();
 
@@ -114,6 +115,11 @@ namespace nd {
   float linear_filter (GridSamples<dim, n> const& samples, vectorf<n> pos) {
     auto id = [] (auto t) { return t; };
     return grid_filter (samples, id, pos);
+  }
+
+  template<uint n, int dim>
+  float smooth_filter (GridSamples<dim, n> const& samples, vectorf<n> pos) {
+    return grid_filter (samples, smoothstep, pos);
   }
 }
 

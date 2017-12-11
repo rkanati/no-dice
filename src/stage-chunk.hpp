@@ -7,41 +7,83 @@
 #include "chunk.hpp"
 #include "chunk-mesh.hpp"
 #include "types.hpp"
-#include "maybe.hpp"
+
+#include <iostream>
 
 namespace nd {
   class StageChunk {
-  public:
+    enum State {
+      dead         = 0,
+      pending_data = 1,
+      loaded       = 2,
+      pending_mesh = 3,
+      meshed       = 4
+    } state = dead;
+
     ChunkData::Shared data;
-    ChunkMesh::Shared mesh;
-    vec3i             position;
-    bool              mesh_ok;
+    ChunkMesh         mesh;
+    v3i               position;
 
-    StageChunk () :
-      mesh (ChunkMesh::create ()),
-      position (nil),
-      mesh_ok (false)
-    { }
+  public:
+    StageChunk () = default;
 
-    StageChunk (ChunkData::Shared data, vec3i position) :
-      data (std::move (data)),
-      mesh (ChunkMesh::create ()),
-      position (position),
-      mesh_ok (false)
-    { }
+    StageChunk (StageChunk const&) = delete;
+    StageChunk (StageChunk&&) = delete;
+    StageChunk& operator = (StageChunk const&) = delete;
+    StageChunk& operator = (StageChunk&&) = delete;
 
-    StageChunk (const StageChunk&) = delete;
-    StageChunk (StageChunk&&) = default;
-    StageChunk& operator = (const StageChunk&) = delete;
-    StageChunk& operator = (StageChunk&&) = default;
+    bool need_data (v3i new_pos) {
+      if (state != dead && new_pos == position)
+        return false;
 
-    void regen_mesh (Array<3, ChunkData const*> const& adjs) {
-      mesh->regen (data.get (), adjs);
-      mesh_ok = true;
+      state = pending_data;
+      data = nullptr;
+      mesh = nullptr;
+      position = new_pos;
+      return true;
     }
 
-    explicit operator bool () const {
-      return (bool) data;
+    bool need_mesh () {
+      if (state != loaded)
+        return false;
+
+      state = pending_mesh;
+      return true;
+    }
+
+    void cancel_meshing () {
+      if (state == pending_mesh)
+        state = loaded;
+    }
+
+    ChunkData::Shared get_data (v3i want_pos) const {
+      if (state >= loaded && position == want_pos) return data;
+      else return nullptr;
+    }
+
+    ChunkMesh get_mesh (v3i want_pos) const {
+      if (state == meshed && position == want_pos) return mesh;
+      else return nullptr;
+    }
+
+    void update_data (ChunkData::Shared new_data, v3i data_pos) {
+      if (!new_data || state != pending_data || data_pos != position) {
+        std::cerr << "Rejecting data " << position << "<-" << data_pos << "\n";
+        return;
+      }
+
+      data = std::move (new_data);
+      state = loaded;
+    }
+
+    void update_mesh (ChunkMesh new_mesh, v3i mesh_pos) {
+      if (state != pending_mesh || mesh_pos != position) {
+        std::cerr << "Rejecting mesh " << position << "<-" << mesh_pos << "\n";
+        return;
+      }
+
+      mesh = std::move (new_mesh);
+      state = meshed;
     }
   };
 }

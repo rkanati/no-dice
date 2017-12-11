@@ -3,7 +3,9 @@
 //
 
 #include "perlin.hpp"
+
 #include "types.hpp"
+#include "smooth.hpp"
 
 #include <limits>
 #include <random>
@@ -12,13 +14,6 @@
 #include <functional>
 
 namespace nd {
-  CoordHasher::CoordHasher (u32 const seed) {
-    std::mt19937 twister (seed);
-    for (uint i = 0; i != 256; i++)
-      perm[i] = i & 0xff;
-    std::shuffle (perm, perm+256, twister);
-  }
-
   namespace {
     template<uint n>
     struct Constants;
@@ -62,10 +57,12 @@ namespace nd {
 
     template<int... is>
     constexpr auto grads_2d (std::integer_sequence<int, is...>) {
-      float const twopi = 6.28318530718f;
-      float const frac = 1.0f / 16.0f;
+      float const
+        twopi = 6.28318530718f,
+        frac = 1.0f / 16.0f,
+        k = twopi * frac;
       return Array<sizeof... (is), v2f> {
-        v2f { 1.414f * std::cos (twopi * is * frac), 1.414f * std::sin (twopi * is * frac) }
+        1.414f * v2f { std::cos (k * is), std::sin (k * is) }
         ...
       };
     }
@@ -87,13 +84,18 @@ namespace nd {
     };
 
     template<uint i>
-    auto gradient (u8 hash) {
-      static constexpr auto const grads = Constants<i>::grads ();
-      return grads[hash & 0xf];
+    auto gradient (u32 hash) {
+      auto constexpr const grads = Constants<i>::grads ();
+      hash = (hash & 0xffff) ^ (hash >> 16);
+      hash = (hash & 0x00ff) ^ (hash >>  8);
+      hash = (hash & 0x000f) ^ (hash >>  4);
+      return grads[hash];
     }
 
-    float ease (float t) {
-      return t * t * t * ((6 * t - 15) * t + 10);
+    template <typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
+    T ease (T t) {
+      //return t * t * t * ((6 * t - 15) * t + 10);
+      return smoothstep (t);
     }
 
     template<uint n, typename T>
@@ -106,9 +108,9 @@ namespace nd {
     auto ones<3, T> = vector3<T> {1,1,1};
 
     template<uint n>
-    float perlin_impl (CoordHasher const& hasher, vectorf<n> pos, int wrap) {
+    float perlin_impl (VecHash hasher, vectorf<n> pos, int wrap) {
       if (wrap < 1)
-        wrap = (std::numeric_limits<int>::max () / 2) + 1;
+        wrap = 1 << 31;
 
       // break into cell and relative (integer and fraction)
       vectori<n> cell = floor (pos);
@@ -116,39 +118,40 @@ namespace nd {
       cell %= wrap;
 
       // apply s-curve to smooth boundaries
-      auto const smoothing = transform (ease, rel),
-                 inv_smoothing = ones<n, float> - smoothing;
+      auto const
+        smoothing = transform (ease<float>, rel),
+        inv_smoothing = ones<n, float> - smoothing;
 
       // offsets of cell corners
-      static constexpr auto const corners = Constants<n>::corners ();
+      auto constexpr const corners = Constants<n>::corners ();
 
       float value = 0.0f;
-      for (auto i = 0; i != corners.size (); i++) {
-        auto corner = corners[i],
-             inv_corner = ones<n, int> - corner;
+      for (auto corner : corners) {
+        auto const inv_corner = ones<n, int> - corner;
 
         // smoothed contribution coefficient for this corner
-        auto coeffs = inv_corner * inv_smoothing + corner * smoothing;
-        float coeff = reduce (std::multiplies<> { }, coeffs);
+        auto const coeffs = inv_corner*inv_smoothing + corner*smoothing;
+        float const coeff = reduce (std::multiplies<> { }, coeffs);
 
         // get gradient for this corner
-        u8 hash = hasher ((cell + corner) % wrap);
-        auto grad = gradient<n> (hash);
+        u32 const hash = hasher ((cell + corner) % wrap);
+        auto const grad = gradient<n> (hash);
 
         // add contribution
-        float contrib = dot (grad, rel - corner);
+        float const contrib = dot (grad, rel - corner);
         value += coeff * contrib;
       }
 
+      // [0, 1]
       return 0.5f + value * 0.5f;
     }
   }
 
-  float perlin (CoordHasher const& hasher, v2f pos, int mask) {
+  float perlin (VecHash hasher, v2f pos, int mask) {
     return perlin_impl (hasher, pos, mask);
   }
 
-  float perlin (CoordHasher const& hasher, v3f pos, int mask) {
+  float perlin (VecHash hasher, v3f pos, int mask) {
     return perlin_impl (hasher, pos, mask);
   }
 }

@@ -19,8 +19,8 @@ namespace nd {
     ChunkCache ();
     ~ChunkCache ();
 
-    auto load  (vec3i chunk_pos) -> std::shared_ptr<ChunkData>;
-    void store (vec3i chunk_pos, std::shared_ptr<ChunkData>);
+    ChunkData::Shared load  (v3i chunk_pos) const;
+    void              store (v3i chunk_pos, ChunkData::Shared);
   };
 }
 

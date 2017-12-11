@@ -7,4 +7,6 @@ gmon.out
 *.make
 *.swp
 *~
+__pycache__/
+*.py
 

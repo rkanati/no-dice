@@ -2,33 +2,36 @@
 // no-dice
 //
 
-#include "glcontext.hpp"
-#include "xwin.hpp"
-
-#include "types.hpp"
-
-#include "frame.hpp"
-#include "chunk.hpp"
-#include "chunk-mesh.hpp"
-#include "stage.hpp"
-#include "syncer.hpp"
-#include "stage-chunk.hpp"
 #include "test-chunk-source.hpp"
+#include "chunk-cache.hpp"
+#include "stage-chunk.hpp"
+#include "chunk-mesh.hpp"
+#include "glcontext.hpp"
+#include "work-pool.hpp"
+#include "frustum.hpp"
+#include "player.hpp"
+#include "syncer.hpp"
+#include "chunk.hpp"
+#include "frame.hpp"
+#include "stage.hpp"
+#include "types.hpp"
+#include "xwin.hpp"
 #include "key.hpp"
 
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
 #include <cassert>
+#include <cstring>
+#include <cstdint>
+#include <cstdlib>
 
-#include <iostream>
 #include <stdexcept>
+#include <iostream>
+#include <iomanip>
+#include <numeric>
 #include <memory>
 #include <vector>
 #include <array>
 
-#include <GL/gl.h>
-#include <GL/glu.h>
+#include <epoxy/gl.h>
 
 namespace nd {
   uint make_test_texture ();
@@ -39,200 +42,276 @@ namespace nd {
     glEnable (GL_CULL_FACE);
     glEnable (GL_DEPTH_TEST);
     glEnableClientState (GL_VERTEX_ARRAY);
-    glEnableClientState (GL_COLOR_ARRAY);
     glEnableClientState (GL_TEXTURE_COORD_ARRAY);
   }
 
-  bool get_adjacent_chunk_datas (
-    Array<3, ChunkData const*>& adjs,
-    Stage const& stage,
-    vec3i const pos)
+  static bool mouse_look = false;
+  static v2i  mouse_prev = nil;
+  static bool wireframe = false;
+
+  void update_input (InputFrame const& input, XHost& host, Player& player) {
+    v2i mouse_delta {0,0};
+
+    for (auto const& ev : input.events) {
+      if (ev.cause.device == host.keyboard ()) {
+        switch ((Key) ev.cause.index) {
+          case Key::w: player.x_move.positive = ev.state; break;
+          case Key::a: player.y_move.positive = ev.state; break;
+          case Key::s: player.x_move.negative = ev.state; break;
+          case Key::d: player.y_move.negative = ev.state; break;
+
+          case Key::l: if (!ev.state) {
+            wireframe = !wireframe;
+            if (wireframe) glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
+            else           glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
+          };
+
+          default:;
+        }
+      }
+      else if (ev.cause.device == host.pointer ()) {
+        if (ev.type == InputType::axial_2i) {
+          if (mouse_look)
+            player.look_delta += ev.value_2i - mouse_prev;
+          mouse_prev = ev.value_2i;
+        }
+        else if (ev.type == InputType::bistate) {
+          if (ev.cause.index == 1)
+            mouse_look = ev.state;
+          else if (ev.cause.index == 2)
+            player.use = ev.state;
+        }
+      }
+    }
+  }
+
+  bool update_stage (
+    WorkPool&         pool,
+    Stage&            stage,
+    v3f               viewpoint,
+    ChunkSource&      source,
+    ChunkCache&       cache,
+    std::vector<v3i>& scratch)
   {
-    static v3i const offsets[] = { v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1} };
+    v3i new_centre = floor (viewpoint) / chunk_dim;
 
-    for (auto i = 0; i != 3; i++) {
-      auto adj_chunk = stage.at_absolute (pos + offsets[i]);
-      if (!adj_chunk) return false;
+    auto& to_load = stage.relocate (new_centre, scratch);
 
-      auto const adj_data = adj_chunk->data.get ();
-      if (!adj_data) return false;
-      else adjs[i] = adj_data;
+    std::sort (
+      to_load.begin (), to_load.end (),
+      [new_centre] (v3i lhs, v3i rhs) {
+        return abs2 (lhs-new_centre) < abs2 (rhs-new_centre);
+      }
+    );
+
+  /*if (!to_load.empty ())
+      std::cerr << "loading " << to_load.size () << " chunks\n";*/
+
+    // load or generate chunks
+    for (v3i chunk_pos : to_load) {
+      if (auto data = cache.load (chunk_pos)) {
+        stage.update_data (std::move (data), chunk_pos);
+      }
+      else {
+      /*data = source.get (chunk_pos);
+        cache.store (chunk_pos, data);
+        stage.update_data (std::move (data), chunk_pos);*/
+        pool.nq ([chunk_pos, &source, &cache, &stage] (WorkPool& pool) {
+          auto data = source.get (chunk_pos);
+          pool.complete ([chunk_pos, d=std::move(data), &cache, &stage] {
+            cache.store (chunk_pos, d);
+            stage.update_data (std::move (d), chunk_pos);
+          });
+        });
+      }
     }
 
     return true;
   }
 
-  template<typename OS, uint n, typename T>
-  OS& operator << (OS& os, Rk::vector<n, T> v) {
-    os << "( ";
-    for (auto x : v)
-      os << x << " ";
-    return os << ")";
+  bool get_adjacent_chunk_datas (
+    std::array<ChunkData const*, 4>& adjs,
+    Stage const& stage,
+    v3i const pos)
+  {
+    std::array <v3i, 4> const constexpr offsets {
+      v3i{0,0,0}, v3i{1,0,0}, v3i{0,1,0}, v3i{0,0,1}
+    };
+
+    for (auto i = 0; i != offsets.size (); i++) {
+      auto want_pos = pos + offsets[i];
+      auto chunk = stage.at_absolute (want_pos);
+      auto const* data = chunk->get_data (want_pos).get ();
+      if (!data)
+        return false;
+      adjs[i] = data;
+    }
+
+    return true;
   }
 
-  void generate_meshes (Stage& stage, std::vector<vec3i> const& required_chunks) {
-    for (vec3i pos : required_chunks) {
-      auto chunk = stage.at_absolute (pos);
+  void sync_meshes (
+    ChunkMesher& mesher,
+    Stage& stage,
+    std::vector<v3i>& scratch,
+    int limit = 10)
+  {
+    auto to_mesh = stage.remesh (scratch);
 
-      Array<3, ChunkData const*> adjs;
-      if (!get_adjacent_chunk_datas (adjs, stage, pos))
+  /*if (!to_mesh.empty ())
+      std::cerr << "meshing " << to_mesh.size () << " chunks\n";*/
+
+    for (v3i chunk_pos : to_mesh) {
+      std::array<ChunkData const*, 4> adjs;
+      if (!get_adjacent_chunk_datas (adjs, stage, chunk_pos) || limit == 0) {
+        stage.cancel_meshing (chunk_pos);
         continue;
+      }
 
-      chunk->regen_mesh (adjs);
+      auto mesh = mesher.build (adjs);
+      stage.at_absolute (chunk_pos)->update_mesh (std::move (mesh), chunk_pos);
+      limit--;
     }
   }
+
+  void draw_stage (Stage const& stage, Frustum const& frustum, Frame& frame) {
+    auto m0 = stage.abs_for_rel (stage.mins ()),
+         m1 = stage.abs_for_rel (stage.maxs ());
+
+  //std::cerr << "drawing " << m0 << " - " << m1 << ": ";
+
+    int drawn = 0;
+    for (auto rel : stage.indices ()) {
+      if (!stage.in_radius (rel))
+        continue;
+
+      auto pos = stage.abs_for_rel (rel);
+      auto mesh = stage.at_relative (rel)->get_mesh (pos);
+      if (!mesh)
+        continue;
+
+      drawn++;
+
+      if (!frustum.intersects_cube (chunk_dim*pos, chunk_dim))
+        continue;
+
+      frame.add_chunk (std::move (mesh), chunk_dim*pos, abs2 (rel));
+    }
+
+  //std::cerr << drawn << "\n";
+  }
+
+  // parameters
+#ifndef NDEBUG
+  auto const stage_radius = 64;
+#else
+  auto const stage_radius = 512;
+#endif
+
+  float const fov = 75.f;
+
+  class FrameCounter {
+    enum { n = 100 };
+    double frame_times[n] = { };
+    int i = 0;
+
+  public:
+    void add_frame (double t) {
+      frame_times[i++] = t;
+      i %= n;
+    }
+
+    double get_rate () const {
+      double total = std::accumulate (
+        std::begin (frame_times),
+        std::end (frame_times),
+        0.
+      );
+      return n / total;
+    }
+  };
 
   void run () {
     // subsystems
     auto host = XHost::create ();
-    auto gl_ctx = GLContext::establish (host->egl_display (), host->egl_window ());
+    auto gl_ctx = GLContext::establish (host->egl_window ());
     configure_gl ();
 
     auto source = make_test_chunk_source ();
+    auto mesher = make_chunk_mesher ();
 
-    // parameters
-#ifndef NDEBUG
-    auto const stage_radius = 9;
-#else
-    auto const stage_radius = 25;
-#endif
+    WorkPool pool (2);
 
     // persistent state
     Syncer syncer;
+    ChunkCache cache;
     Stage stage (stage_radius);
-    Camera camera (v3f {0.0f, 0.0f, 20.f}, identity);
-    versf camera_yaw (identity);
-    float camera_pitch = 0.0f;
-
-    v2f mouse_prev (nil);
-    bool mouse_look = false;
-
-    bool x_posve_go = false,
-         x_negve_go = false,
-         y_posve_go = false,
-         y_negve_go = false;
+    Player player (v3f {0.f, 0.f, 17.f});
+    v2i mouse_prev;
 
     // transient state
-    std::vector<vec3i> required_chunks;
+    std::vector<v3i> scratch;
     Frame frame;
+    FrameCounter frame_counter;
+    double last_report = 0.;
 
     // test texture
     uint tex = make_test_texture ();
 
     // main loop
-    while (true) {
+    for (;;) {
+      pool.run_completions ();
+
       // handle events
       auto input = host->pump ();
       if (input.quit)
         break;
 
-      v2i mouse_delta {0,0};
-
-      for (auto const& ev : input.events) {
-        if (ev.cause.device == host->keyboard ()) {
-          switch ((Key) ev.cause.index) {
-            case Key::w: x_posve_go = ev.state; break;
-            case Key::s: x_negve_go = ev.state; break;
-            case Key::a: y_posve_go = ev.state; break;
-            case Key::d: y_negve_go = ev.state; break;
-            default:;
-          }
-        }
-        else if (ev.cause.device == host->pointer ()) {
-          if (ev.type == InputType::axial_2i) {
-            mouse_delta += ev.value_2i - mouse_prev;
-            mouse_prev = ev.value_2i;
-          }
-          else if (ev.type == InputType::bistate) {
-            mouse_look = ev.state;
-          }
-        }
-      }
-
-      v3f camera_move{0,0,0};
-
-      if (x_posve_go != x_negve_go) {
-        if (x_posve_go) camera_move.x = 1.0f;
-        else            camera_move.x = -1.0f;
-      }
-
-      if (y_posve_go != y_negve_go) {
-        if (y_posve_go) camera_move.y = 1.0f;
-        else            camera_move.y = -1.0f;
-      }
-
-      camera_move = unit (camera_move);
-
-      if (mouse_look) {
-        v2f camera_rotate = mouse_delta * 0.002f;
-        camera_yaw = rotation (-camera_rotate.x, v3f{0,0,1}) * camera_yaw;
-        camera_pitch += camera_rotate.y;
-        camera_pitch = std::min (std::max (camera_pitch, -1.5f), 1.5f);
-
-        camera.ori = camera_yaw * rotation (camera_pitch, v3f{0,1,0});
-      }
-
-      camera_move = conj (camera.ori, camera_move);
+      update_input (input, *host, player);
 
       // advance simulation
-      Camera old_camera = camera;
-
-      syncer.update ();
+      double frame_time = syncer.update ();
       while (syncer.need_tick ()) {
         syncer.begin_tick ();
-        old_camera = camera;
-        camera.pos += camera_move;
+        player.advance (syncer.time_step);
       }
 
-      vec3i camera_chunk = floor (camera.pos) / 16;
+      // update fps
+      frame_counter.add_frame (frame_time);
+      if (syncer.frame_time () - last_report >= 1.0) {
+        std::cerr << "\r" << std::fixed << std::setprecision (1)
+                  << frame_counter.get_rate ();
+        last_report = syncer.frame_time ();
+      }
 
       // update stage
-      stage.relocate (camera_chunk, required_chunks);
-      std::sort (
-        required_chunks.begin (), required_chunks.end (),
-        [camera_chunk] (v3i lhs, v3i rhs) {
-          return abs2 (lhs-camera_chunk) < abs2 (rhs-camera_chunk);
-        }
-      );
-
-      auto cull = std::find_if (
-        required_chunks.begin (), required_chunks.end (),
-        [camera_chunk] (v3i pos) {
-          return abs2 (pos-camera_chunk) >= stage_radius * stage_radius;
-        }
-      );
-
-      required_chunks.erase (cull, required_chunks.end ());
-
-      // load or generate chunks
-      int n = 100;
-      for (vec3i chunk_pos : required_chunks) {
-        auto data = source->get (chunk_pos);
-        stage.insert (StageChunk (std::move (data), chunk_pos));
-        if (n-- == 0)
-          break;
-      }
+      update_stage (pool, stage, player.position (), *source, cache, scratch);
 
       // generate meshes
-      auto const needs_mesh = [] (StageChunk const& c) { return !c.mesh_ok; };
-      stage.find_all_if (needs_mesh, required_chunks);
-      generate_meshes (stage, required_chunks);
+      sync_meshes (*mesher, stage, scratch);
 
-      // redraw
-      for (auto idx : stage.indices ()) {
-        auto chunk = stage.at_relative (idx);
-        if (!chunk || !chunk->mesh_ok)
-          continue;
+      // draw
+      auto camera = lerp (player.prev_placement (), player.placement (), syncer.alpha ());
+      Frustum frustum (camera, fov, host->aspect ());
+      draw_stage (stage, frustum, frame);
 
-        frame.add_cmesh (chunk->mesh.get (), chunk->position * vec3i {16,16,16});
-      }
+      frame.set_frustum (frustum);
 
-      frame.set_camera (old_camera, camera);
-
-      glBindTexture (GL_TEXTURE_2D, tex);
+      glBindTexture (GL_TEXTURE_2D_ARRAY, tex);
       frame.draw (host->dims (), syncer.frame_time (), syncer.alpha ());
       gl_ctx.flip ();
     }
+  }
+}
+
+void show_exception (std::exception const& e) {
+  std::cerr << "Exception:\n" << e.what () << "\n";
+
+  try {
+    std::rethrow_if_nested (e);
+  }
+  catch (std::exception const& e) {
+    show_exception (e);
   }
 }
 
@@ -240,7 +319,7 @@ int main () try {
   nd::run ();
 }
 catch (std::exception const& e) {
-  std::cerr << "Exception:\n" << e.what () << "\n";
+  show_exception (e);
   return 1;
 }
 

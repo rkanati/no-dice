@@ -2,55 +2,27 @@
 #pragma once
 
 #include "types.hpp"
-#include "vector.hpp"
-#include "versor.hpp"
+#include "placement.hpp"
 #include "chunk-mesh.hpp"
+#include "shader.hpp"
+#include "frustum.hpp"
 
 #include <vector>
 
 namespace nd {
-  struct Camera {
-    v3f   pos;
-    versf ori;
-
-    Camera () = default;
-
-    Camera (nil_t) :
-      pos (nil), ori (identity)
-    { }
-
-    Camera (v3f pos, versf ori) :
-      pos (pos), ori (ori)
-    { }
-  };
-
-  static Camera lerp (Camera const& from, Camera const& to, float alpha) {
-    return {
-      lerp (from.pos, to.pos, alpha),
-      lerp (from.ori, to.ori, alpha)
-    };
-  }
-
   class Frame {
-    Camera old_camera, cur_camera;
-
-    struct ChunkItem {
-      ChunkMesh const* mesh;
-      vec3i offset;
-    };
-
-    std::vector<ChunkItem> chunk_items;
+    ChunkRenderer::Shared chunk_renderer;
+    m4f w2e, e2c;
+    std::vector<ChunkRenderer::Item> chunk_items;
 
   public:
-    Frame () = default;
+    Frame ();
 
-    void set_camera (Camera old, Camera cur) {
-      old_camera = old;
-      cur_camera = cur;
-    }
+    void set_frustum (Frustum f) { w2e = f.w2e; e2c = f.e2c; }
 
-    void add_cmesh (ChunkMesh const* cmesh, vec3i offset) {
-      chunk_items.push_back (ChunkItem { cmesh, offset });
+    void add_chunk (ChunkMesh const& mesh, v3i offset, int z) {
+      ChunkRenderer::Item item { mesh.get (), offset, z };
+      chunk_items.push_back (item);
     }
 
     void draw (v2i dims, float time, float alpha);

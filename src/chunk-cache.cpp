@@ -4,21 +4,13 @@
 
 #include "chunk-cache.hpp"
 
+#include "vector.hpp"
+
 #include <unordered_map>
 
 namespace nd {
-  struct VecHash {
-    std::size_t operator () (vec3i v) const {
-      size_t hash = 0;
-      for (int i = 0; i != 3; i++)
-        hash ^= u32 (v[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-      return hash;
-    }
-  };
-
   struct ChunkCache::Impl {
-    using Entry = std::shared_ptr<ChunkData>;
-    std::unordered_map<vec3i, Entry, VecHash> map;
+    std::unordered_map<v3i, ChunkData::Shared, VecHash> map;
   };
 
   ChunkCache::ChunkCache () :
@@ -29,7 +21,7 @@ namespace nd {
     delete impl;
   }
 
-  auto ChunkCache::load (vec3i chunk_pos) -> std::shared_ptr<ChunkData> {
+  ChunkData::Shared ChunkCache::load (v3i chunk_pos) const {
     auto iter = impl->map.find (chunk_pos);
     if (iter == impl->map.end ())
       return nullptr;
@@ -37,8 +29,11 @@ namespace nd {
     return iter->second;
   }
 
-  void ChunkCache::store (vec3i chunk_pos, std::shared_ptr<ChunkData> chunk) {
-    impl->map.insert (impl->map.end (), std::make_pair (chunk_pos, std::move (chunk)));
+  void ChunkCache::store (v3i chunk_pos, ChunkData::Shared chunk) {
+    impl->map.insert (
+      impl->map.end (),
+      std::make_pair (chunk_pos, std::move (chunk))
+    );
   }
 }
 

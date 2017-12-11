@@ -6,7 +6,6 @@
 
 #include "vector.hpp"
 #include "vec-iter.hpp"
-#include "maybe.hpp"
 #include "types.hpp"
 #include "stage-chunk.hpp"
 
@@ -18,21 +17,14 @@ namespace nd {
     int const         dim;
     v3i const         strides;
     StageChunk* const chunks;
-    vec3i             centre;
+    v3i               centre;
 
-    vec3i abs_for_rel (vec3i rel) const {
-      return rel + centre;
-    }
-
-    int index_abs (vec3i pos) const {
+    int index_abs (v3i pos) const {
       auto ijk = (pos % dim + v3i{dim,dim,dim}) % dim;
-      // if (ijk.x < 0) ijk.x += dim;
-      // if (ijk.y < 0) ijk.y += dim;
-      // if (ijk.z < 0) ijk.z += dim;
       return dot (ijk, strides);
     }
 
-    int index_rel (vec3i rel) const {
+    int index_rel (v3i rel) const {
       return index_abs (abs_for_rel (rel));
     }
 
@@ -52,12 +44,12 @@ namespace nd {
       return dim * dim * dim;
     }
 
-    vec3i maxs () const {
-      const int r = dim / 2;
+    v3i maxs () const {
+      int const r = dim / 2;
       return { r, r, r };
     }
 
-    vec3i mins () const {
+    v3i mins () const {
       return -maxs () + v3i{1,1,1};
     }
 
@@ -65,45 +57,47 @@ namespace nd {
       return vec_range (mins (), maxs () + v3i{1,1,1});
     }
 
-    void relocate (vec3i new_centre, std::vector<vec3i>& missing);
-
-    template<typename Pred>
-    void find_all_if (Pred pred, std::vector<vec3i>& list) {
-      list.clear ();
-
-      for (auto rel : indices ()) {
-        auto chunk = at_relative (rel);
-        if (!chunk)
-          continue;
-
-        if (pred (*chunk))
-          list.push_back (abs_for_rel (rel));
-      }
+    bool in_radius (v3i rel) const {
+      int const r = dim / 2;
+      return abs2 (rel) <= r*r;
     }
 
-    void insert (StageChunk chunk) {
-      auto& element = chunk_at (index_abs (chunk.position));
-      element = std::move (chunk);
+    v3i abs_for_rel (v3i rel) const {
+      return rel + centre;
     }
 
-    auto at_absolute (vec3i pos) const -> StageChunk const* {
-      auto const& cell = chunk_at (index_abs (pos));
-      if (!cell || cell.position != pos) return nullptr;
-      else return &cell;
+    auto relocate (v3i new_centre, std::vector<v3i>& missing)
+      -> std::vector<v3i>&;
+
+    auto remesh (std::vector<v3i>& to_mesh)
+      -> std::vector<v3i>&;
+
+    void update_data (ChunkData::Shared data, v3i pos) {
+      at_absolute (pos)->update_data (std::move (data), pos);
     }
 
-    auto at_relative (vec3i off) const -> StageChunk const* {
-      return at_absolute (abs_for_rel (off));
+    void update_mesh (ChunkMesh mesh, v3i pos) {
+      at_absolute (pos)->update_mesh (std::move (mesh), pos);
     }
 
-    auto at_absolute (vec3i pos) -> StageChunk* {
-      auto& cell = chunk_at (index_abs (pos));
-      if (!cell || cell.position != pos) return nullptr;
-      else return &cell;
+    void cancel_meshing (v3i pos) {
+      at_absolute (pos)->cancel_meshing ();
     }
 
-    auto at_relative (vec3i off) -> StageChunk* {
-      return at_absolute (abs_for_rel (off));
+    auto at_absolute (v3i pos) const -> StageChunk const* {
+      return &chunk_at (index_abs (pos));
+    }
+
+    auto at_relative (v3i off) const -> StageChunk const* {
+      return &chunk_at (index_rel (off));
+    }
+
+    auto at_absolute (v3i pos) -> StageChunk* {
+      return &chunk_at (index_abs (pos));
+    }
+
+    auto at_relative (v3i off) -> StageChunk* {
+      return &chunk_at (index_rel (off));
     }
   };
 }

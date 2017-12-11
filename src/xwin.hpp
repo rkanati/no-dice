@@ -23,7 +23,12 @@ namespace nd {
     int width  () const { return dims ().x; }
     int height () const { return dims ().y; }
 
-    virtual auto egl_display () -> EGLNativeDisplayType = 0;
+    float aspect () const {
+      v2f ds = dims ();
+      return ds.x / ds.y;
+    }
+
+  //virtual auto egl_display () -> EGLNativeDisplayType = 0;
     virtual auto egl_window  () -> EGLNativeWindowType = 0;
 
     virtual auto keyboard () -> InputDevice* = 0;

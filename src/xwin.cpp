@@ -4,8 +4,9 @@
 
 #include "xwin.hpp"
 
-#include "guard.hpp"
 #include "types.hpp"
+
+#include <Rk/guard.hpp>
 
 #include <stdexcept>
 #include <cstdlib>
@@ -14,7 +15,6 @@
 #include <xcb/xcb.h>
 #include <xcb/xcb_event.h>
 #include <xcb/xcb_keysyms.h>
-#include <X11/Xlib-xcb.h>
 
 namespace nd {
   class Keyboard final : public InputDevice {
@@ -78,7 +78,7 @@ namespace nd {
   };
 
   class XHostImpl final : public XHost {
-    Display*           const disp;
+  //Display*           const disp;
     xcb_connection_t*  const conn;
     xcb_window_t       const win;
     xcb_atom_t         const wm_delete_atom;
@@ -90,8 +90,8 @@ namespace nd {
     int wide, high;
 
   public:
-    XHostImpl (Display* d, xcb_connection_t* c, xcb_window_t w, xcb_atom_t wmda, xcb_key_symbols_t* ks) :
-      disp (d),
+    XHostImpl (/*Display* d,*/ xcb_connection_t* c, xcb_window_t w, xcb_atom_t wmda, xcb_key_symbols_t* ks) :
+    //disp (d),
       conn (c),
       win (w),
       wm_delete_atom (wmda),
@@ -101,7 +101,8 @@ namespace nd {
     { }
 
     ~XHostImpl () {
-      XCloseDisplay (disp);
+    //XCloseDisplay (disp);
+      xcb_disconnect (conn);
     }
 
     void handle_event (InputFrame& inframe, xcb_generic_event_t const* ev) {
@@ -162,9 +163,9 @@ namespace nd {
       return { wide, high };
     }
 
-    EGLNativeDisplayType egl_display () override {
+  /*EGLNativeDisplayType egl_display () override {
       return disp;
-    }
+    }*/
 
     EGLNativeWindowType egl_window () override {
       return win;
@@ -180,7 +181,7 @@ namespace nd {
   };
 
   XHost::Ptr XHost::create () {
-    Display* disp = XOpenDisplay (nullptr);
+  /*Display* disp = XOpenDisplay (nullptr);
     if (!disp)
       throw std::runtime_error ("XOpenDisplay failed");
 
@@ -188,7 +189,8 @@ namespace nd {
 
     xcb_connection_t* conn = XGetXCBConnection (disp);
     if (!conn)
-      throw std::runtime_error ("XGetXCBConnection failed");
+      throw std::runtime_error ("XGetXCBConnection failed");*/
+    auto* conn = xcb_connect (nullptr, nullptr);
     if (xcb_connection_has_error (conn))
       throw std::runtime_error ("xcb_connection has errors");
 
@@ -250,8 +252,8 @@ namespace nd {
 
     xcb_flush (conn);
 
-    disp_guard.relieve ();
-    return std::make_unique<XHostImpl> (disp, conn, win, wm_delete_atom, keysyms);
+  //disp_guard.relieve ();
+    return std::make_unique<XHostImpl> (/*disp,*/ conn, win, wm_delete_atom, keysyms);
   }
 }
 

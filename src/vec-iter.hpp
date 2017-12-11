@@ -35,7 +35,7 @@ namespace nd {
     }
 
     VecIter operator ++ () {
-      for (int i = 0; i != n; i++) {
+      for (int i = n-1; i >= 0; i--) {
         v[i]++;
         if (v[i] != end[i])
           break;

@@ -26,12 +26,14 @@ namespace nd {
       accumulator    (0.0)
     { }
 
-    void update () {
-      double real_time = now ();
-      accumulator += real_time - prev_real_time;
+    double update () {
+      double real_time = now (),
+             delta_rt = real_time - prev_real_time;
+      accumulator += delta_rt;
       prev_real_time = real_time;
       if (accumulator > max_update)
         accumulator = max_update;
+      return delta_rt;
     }
 
     bool need_tick () const {

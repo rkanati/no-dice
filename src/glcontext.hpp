@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <EGL/egl.h>
+#include <epoxy/egl.h>
 
 namespace nd {
   class GLContext {
@@ -17,7 +17,7 @@ namespace nd {
     { }
 
   public:
-    static GLContext establish (EGLNativeDisplayType, EGLNativeWindowType);
+    static GLContext establish (/*EGLNativeDisplayType,*/ EGLNativeWindowType);
     ~GLContext ();
     void flip ();
   };

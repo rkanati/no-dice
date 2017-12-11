@@ -5,12 +5,15 @@
 #pragma once
 
 #include <Rk/types.hpp>
+#include <Rk/string_ref.hpp>
 
 #include <array>
 #include <memory>
 #include <utility>
 
 namespace nd {
+  using StrRef = Rk::StringRef;
+
   template<size_t n, typename T>
   using Array = std::array<T, n>;
 

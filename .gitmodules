@@ -4,3 +4,6 @@
 [submodule "rk-core"]
 	path = rk-core
 	url = http://github.com/halfbin/rk-core.git
+[submodule "rk-rawio"]
+	path = rk-rawio
+	url = http://github.com/halfbin/rk-rawio.git

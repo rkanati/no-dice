@@ -4,9 +4,11 @@
 
 #include "stage.hpp"
 
+#include <iostream>
+
 namespace nd {
   Stage::Stage (unsigned radius) :
-    dim (radius * 2),
+    dim ((radius*2 + chunk_dim - 1) / chunk_dim),
     strides { dim*dim, dim, 1 },
     chunks (new StageChunk [dim * dim * dim]),
     centre {0,0,0}
@@ -16,16 +18,41 @@ namespace nd {
     delete[] chunks;
   }
 
-  void Stage::relocate (vec3i new_centre, std::vector<vec3i>& missing) {
+  auto Stage::relocate (v3i new_centre, std::vector<v3i>& missing)
+    -> std::vector<v3i>&
+  {
+    missing.clear ();
     centre = new_centre;
 
-    missing.clear ();
     for (auto rel : indices ()) {
-      vec3i correct_pos = abs_for_rel (rel);
-      auto& chunk = chunk_at (index_abs (correct_pos));
-      if (!chunk || chunk.position != correct_pos)
+      if (!in_radius (rel))
+        continue;
+
+      v3i correct_pos = abs_for_rel (rel);
+      auto& chunk = *at_absolute (correct_pos);
+      if (chunk.need_data (correct_pos))
         missing.push_back (correct_pos);
     }
+
+    return missing;
+  }
+
+  auto Stage::remesh (std::vector<v3i>& to_mesh)
+    -> std::vector<v3i>&
+  {
+    to_mesh.clear ();
+
+    for (auto rel : indices ()) {
+      if (!in_radius (rel))
+        continue;
+
+      v3i pos = abs_for_rel (rel);
+      auto& chunk = *at_absolute (pos);
+      if (chunk.need_mesh ())
+        to_mesh.push_back (pos);
+    }
+
+    return to_mesh;
   }
 }
 

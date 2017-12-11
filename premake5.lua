@@ -2,32 +2,44 @@ workspace "no-dice"
   configurations { "debug", "release", "profile" }
 
 project "no-dice"
-  kind "ConsoleApp"
+  kind "WindowedApp"
   language "C++"
   targetdir "%{cfg.buildcfg}/bin"
 
-  files { "src/**.hpp", "src/**.cpp" }
+  files {
+    "src/**.hpp",
+    "src/**.cpp",
+    "rk-core/src/**.cpp",
+    "rk-rawio/src/**.cpp"
+  }
 
-  includedirs { "rk-core/include", "rk-math/include" }
-  links { "xcb", "X11-xcb", "X11", "GL", "GLU", "EGL", "xcb-keysyms" }
+  includedirs {
+    "rk-core/include",
+    "rk-math/include",
+    "rk-rawio/include"
+  }
+
+  links { "xcb", "xcb-keysyms", "epoxy" }
 
   warnings "Extra"
 
   filter "configurations:debug"
     defines { "DEBUG" }
-    flags { "Symbols" }
+    symbols "On"
 
   filter "configurations:release"
     defines { "NDEBUG" }
+    symbols "On"
     optimize "On"
 
   filter "configurations:profile"
-    defines { "NDEBUG" }
-    flags { "Symbols" }
+    defines { "NDEBUG", "PROFILING" }
+    symbols "On"
     optimize "On"
-    buildoptions { "-pg" }
-    linkoptions { "-pg" }
+    buildoptions { "-pg", "-no-pie" }
+    linkoptions { "-pg", "-no-pie" }
 
-  filter "action:gmake" -- FIXME: this should be toolset:gcc, but toolset: is broken in premake5 as of 2015-09-01
-    buildoptions { "-std=c++14" }
+  filter "toolset:gcc"
+    buildoptions { "-std=c++17", "-pthread" }
+    linkoptions { "-pthread" }
 
