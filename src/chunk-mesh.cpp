@@ -59,8 +59,8 @@ namespace nd {
     uint index_buffer = 0;
 
     std::vector<Vertex> tiles[6][chunk_dim];
-    std::vector<Quad> quads;
-    std::vector<Strip> strips;
+    std::vector<Strip>  strips;
+    std::vector<Quad>   quads;
 
     void bind_indices ();
 

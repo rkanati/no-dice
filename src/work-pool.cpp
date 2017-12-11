@@ -30,7 +30,7 @@ namespace nd {
   WorkPool::~WorkPool () {
     { std::lock_guard<std::mutex> lock (mutex);
       queue.clear ();
-      for (auto& t : pool)
+      for (size_t i = 0; i != pool.size (); i++)
         queue.push_back (nullptr);
       cv.notify_all ();
     }

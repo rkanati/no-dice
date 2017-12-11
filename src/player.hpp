@@ -48,7 +48,7 @@ namespace nd {
 
       switch (dir) {
         case pos: return  1.f;
-        case neg: return -1.f;
+        default:  return -1.f;
       }
     }
   };

@@ -17,8 +17,10 @@ namespace nd {
 
     #ifndef NDEBUG
     int const dim = 8;
+    int const n_mips = 1;
     #else
     int const dim = 512;
+    int const n_mips = 4;
     #endif
 
     std::array<v3f, 3> const primaries {
@@ -31,6 +33,17 @@ namespace nd {
     glGenTextures (1, &tex);
     glBindTexture (GL_TEXTURE_2D_ARRAY, tex);
     glTexStorage3D (GL_TEXTURE_2D_ARRAY, 4, GL_RGB8, dim, dim, 256);
+
+    v2i constexpr const attribs[] {
+      { GL_TEXTURE_MIN_FILTER,          GL_LINEAR_MIPMAP_LINEAR },
+      { GL_TEXTURE_MAG_FILTER,          GL_NEAREST },
+      { GL_TEXTURE_WRAP_S,              GL_REPEAT },
+      { GL_TEXTURE_WRAP_T,              GL_REPEAT },
+      { GL_TEXTURE_MAX_ANISOTROPY_EXT,  1 },
+      { GL_TEXTURE_MAX_LEVEL,           n_mips-1 }
+    };
+    for (v2i attr : attribs)
+      glTexParameteri (GL_TEXTURE_2D_ARRAY, attr.x, attr.y);
 
     std::vector<std::future<std::unique_ptr<v3f[]>>> futs;
 
@@ -46,7 +59,7 @@ namespace nd {
         slab_rel
       ));
 
-      auto fut = pool.nq ([colour, i, dim] (WorkPool& pool) {
+      auto fut = pool.nq ([colour, i, dim] (WorkPool&) {
         auto data = std::make_unique<v3f[]> (dim*dim);
 
         int const s = 947441244;
@@ -71,17 +84,7 @@ namespace nd {
       futs.push_back (std::move (fut));
     }
 
-    v2i constexpr const attribs[] {
-      { GL_TEXTURE_MIN_FILTER,          GL_LINEAR_MIPMAP_LINEAR },
-      { GL_TEXTURE_MAG_FILTER,          GL_NEAREST },
-      { GL_TEXTURE_WRAP_S,              GL_REPEAT },
-      { GL_TEXTURE_WRAP_T,              GL_REPEAT },
-      { GL_TEXTURE_MAX_ANISOTROPY_EXT,  1 }
-    };
-    for (v2i attr : attribs)
-      glTexParameteri (GL_TEXTURE_2D_ARRAY, attr.x, attr.y);
-
-    for (int i = 0; i != futs.size (); i++) {
+    for (int i = 0; i != (int) futs.size (); i++) {
       auto data = futs[i].get ();
       glTexSubImage3D (
         GL_TEXTURE_2D_ARRAY,

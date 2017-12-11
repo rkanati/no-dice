@@ -10,39 +10,38 @@ namespace nd {
   template<unsigned n, typename X>
   class VecIter {
   public:
-    using value_type = Rk::vector<n, X>;
+    using value_type = vector<n, X>;
 
   private:
-    value_type  v;
-    const value_type begin;
-    const value_type end;
+    value_type cur;
+    value_type const begin, end;
 
   public:
     VecIter (value_type new_begin, value_type new_end) :
-      v     (new_begin),
+      cur   (new_begin),
       begin (new_begin),
       end   (new_end)
     { }
 
     VecIter () :
-      v     (nil),
+      cur   (nil),
       begin (nil),
       end   (nil)
     { }
 
     explicit operator bool () const {
-      return v != end;
+      return cur != end;
     }
 
     VecIter operator ++ () {
       for (int i = n-1; i >= 0; i--) {
-        v[i]++;
-        if (v[i] != end[i])
+        cur[i]++;
+        if (cur[i] != end[i])
           break;
-        v[i] = begin[i];
+        cur[i] = begin[i];
       }
-      if (v == begin)
-        v = end;
+      if (cur == begin)
+        cur = end;
       return *this;
     }
 
@@ -61,7 +60,7 @@ namespace nd {
     }
 
     auto operator * () const {
-      return v;
+      return cur;
     }
   };
 
@@ -71,10 +70,10 @@ namespace nd {
     using iterator = VecIter<n, X>;
 
   private:
-    Rk::vector<n, X> mins, maxs;
+    vector<n, X> mins, maxs;
 
   public:
-    constexpr explicit VecRange (Rk::vector<n, X> mins, Rk::vector<n, X> maxs) :
+    explicit constexpr VecRange (vector<n, X> mins, vector<n, X> maxs) :
       mins (mins), maxs (maxs)
     { }
 
@@ -88,7 +87,7 @@ namespace nd {
   };
 
   template<unsigned n, typename X>
-  static auto constexpr vec_range (Rk::vector<n, X> begin, Rk::vector<n, X> end) {
+  static auto constexpr vec_range (vector<n, X> begin, vector<n, X> end) {
     return VecRange<n, X> (begin, end);
   }
 }

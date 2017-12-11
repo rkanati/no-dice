@@ -29,8 +29,10 @@ project "no-dice"
 
   filter "configurations:release"
     defines { "NDEBUG" }
-    symbols "On"
+    symbols "Off"
     optimize "On"
+    buildoptions { "-flto", "-fuse-linker-plugin", "-fno-fat-lto-objects", "-O3" }
+    linkoptions { "-flto", "-fuse-linker-plugin", "-fno-fat-lto-objects", "-O3" }
 
   filter "configurations:profile"
     defines { "NDEBUG", "PROFILING" }

@@ -100,18 +100,12 @@ namespace nd {
       }
     );
 
-  /*if (!to_load.empty ())
-      std::cerr << "loading " << to_load.size () << " chunks\n";*/
-
     // load or generate chunks
     for (v3i chunk_pos : to_load) {
       if (auto data = cache.load (chunk_pos)) {
         stage.update_data (std::move (data), chunk_pos);
       }
       else {
-      /*data = source.get (chunk_pos);
-        cache.store (chunk_pos, data);
-        stage.update_data (std::move (data), chunk_pos);*/
         pool.nq ([chunk_pos, &source, &cache, &stage] (WorkPool& pool) {
           auto data = source.get (chunk_pos);
           pool.complete ([chunk_pos, d=std::move(data), &cache, &stage] {
@@ -154,9 +148,6 @@ namespace nd {
   {
     auto to_mesh = stage.remesh (scratch);
 
-  /*if (!to_mesh.empty ())
-      std::cerr << "meshing " << to_mesh.size () << " chunks\n";*/
-
     for (v3i chunk_pos : to_mesh) {
       std::array<ChunkData const*, 4> adjs;
       if (!get_adjacent_chunk_datas (adjs, stage, chunk_pos) || limit == 0) {
@@ -171,12 +162,6 @@ namespace nd {
   }
 
   void draw_stage (Stage const& stage, Frustum const& frustum, Frame& frame) {
-  /*auto m0 = stage.abs_for_rel (stage.mins ()),
-         m1 = stage.abs_for_rel (stage.maxs ());*/
-
-  //std::cerr << "drawing " << m0 << " - " << m1 << ": ";
-
-    int drawn = 0;
     for (auto rel : stage.indices ()) {
       if (!stage.in_radius (rel))
         continue;
@@ -186,15 +171,11 @@ namespace nd {
       if (!mesh)
         continue;
 
-      drawn++;
-
       if (!frustum.intersects_cube (chunk_dim*pos, chunk_dim))
         continue;
 
       frame.add_chunk (std::move (mesh), chunk_dim*pos, abs2 (rel));
     }
-
-  //std::cerr << drawn << "\n";
   }
 
   // parameters
@@ -207,7 +188,7 @@ namespace nd {
   float const fov = 75.f;
 
   class FrameCounter {
-    enum { n = 100 };
+    enum { n = 60 };
     double frame_times[n] = { };
     int i = 0;
 
@@ -236,7 +217,7 @@ namespace nd {
     auto source = make_test_chunk_source ();
     auto mesher = make_chunk_mesher ();
 
-    WorkPool pool (3);
+    WorkPool pool (4);
 
     // persistent state
     Syncer syncer;
@@ -244,12 +225,12 @@ namespace nd {
     Stage stage (stage_radius);
     Player player (v3f {0.f, 0.f, 17.f});
     v2i mouse_prev;
+    double last_report = 0.;
 
     // transient state
     std::vector<v3i> scratch;
     Frame frame;
     FrameCounter frame_counter;
-    double last_report = 0.;
 
     // test texture
     uint tex = make_test_texture (pool);
@@ -274,7 +255,7 @@ namespace nd {
 
       // update fps
       frame_counter.add_frame (frame_time);
-      if (syncer.frame_time () - last_report >= 1.0) {
+      if (syncer.frame_time () - last_report >= 0.25) {
         std::cerr << "\r" << std::fixed << std::setprecision (1)
                   << frame_counter.get_rate ();
         last_report = syncer.frame_time ();
