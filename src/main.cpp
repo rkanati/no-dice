@@ -34,15 +34,12 @@
 #include <epoxy/gl.h>
 
 namespace nd {
-  uint make_test_texture ();
+  uint make_test_texture (WorkPool&);
 
   void configure_gl () {
-    glShadeModel (GL_SMOOTH);
-    glEnable (GL_MULTISAMPLE);
+    glLineWidth (3.f);
     glEnable (GL_CULL_FACE);
     glEnable (GL_DEPTH_TEST);
-    glEnableClientState (GL_VERTEX_ARRAY);
-    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
   }
 
   static bool mouse_look = false;
@@ -55,15 +52,14 @@ namespace nd {
     for (auto const& ev : input.events) {
       if (ev.cause.device == host.keyboard ()) {
         switch ((Key) ev.cause.index) {
-          case Key::w: player.x_move.positive = ev.state; break;
-          case Key::a: player.y_move.positive = ev.state; break;
-          case Key::s: player.x_move.negative = ev.state; break;
-          case Key::d: player.y_move.negative = ev.state; break;
+          case Key::w: player.x_move.positive (ev.state); break;
+          case Key::a: player.y_move.positive (ev.state); break;
+          case Key::s: player.x_move.negative (ev.state); break;
+          case Key::d: player.y_move.negative (ev.state); break;
 
           case Key::l: if (!ev.state) {
             wireframe = !wireframe;
-            if (wireframe) glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
-            else           glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
+            glPolygonMode (GL_FRONT_AND_BACK, wireframe? GL_LINE : GL_FILL);
           };
 
           default:;
@@ -175,8 +171,8 @@ namespace nd {
   }
 
   void draw_stage (Stage const& stage, Frustum const& frustum, Frame& frame) {
-    auto m0 = stage.abs_for_rel (stage.mins ()),
-         m1 = stage.abs_for_rel (stage.maxs ());
+  /*auto m0 = stage.abs_for_rel (stage.mins ()),
+         m1 = stage.abs_for_rel (stage.maxs ());*/
 
   //std::cerr << "drawing " << m0 << " - " << m1 << ": ";
 
@@ -240,7 +236,7 @@ namespace nd {
     auto source = make_test_chunk_source ();
     auto mesher = make_chunk_mesher ();
 
-    WorkPool pool (2);
+    WorkPool pool (3);
 
     // persistent state
     Syncer syncer;
@@ -256,7 +252,7 @@ namespace nd {
     double last_report = 0.;
 
     // test texture
-    uint tex = make_test_texture ();
+    uint tex = make_test_texture (pool);
 
     // main loop
     for (;;) {

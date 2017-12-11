@@ -84,13 +84,9 @@ namespace nd {
       throw std::runtime_error ("eglMakeCurrent failed");
 
     glEnable (GL_FRAMEBUFFER_SRGB);
+    glEnable (GL_MULTISAMPLE);
 
     glHint (GL_TEXTURE_COMPRESSION_HINT, GL_NICEST);
-
-  //glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
-    glLineWidth (3.f);
-
-    glEnable (GL_MULTISAMPLE);
 
     #ifndef NDEBUG
     glDebugMessageCallback (handle_gl_debug, nullptr);

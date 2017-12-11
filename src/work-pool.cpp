@@ -14,6 +14,19 @@ namespace nd {
     }
   }
 
+  WorkPool::WorkPool (
+    std::function<std::shared_ptr<void>()> make_ctx,
+    int n)
+  {
+    while (n--) {
+      std::thread t ([this, make_ctx] {
+        auto ctx = make_ctx ();
+        worker ();
+      });
+      pool.push_back (std::move (t));
+    }
+  }
+
   WorkPool::~WorkPool () {
     { std::lock_guard<std::mutex> lock (mutex);
       queue.clear ();

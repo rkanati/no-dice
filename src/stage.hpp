@@ -58,8 +58,9 @@ namespace nd {
     }
 
     bool in_radius (v3i rel) const {
+      using namespace Rk::swiz;
       int const r = dim / 2;
-      return abs2 (rel) <= r*r;
+      return abs2 (rel(X,Y)) <= r*r;
     }
 
     v3i abs_for_rel (v3i rel) const {

@@ -2,6 +2,7 @@
 // no-dice
 //
 
+#include "work-pool.hpp"
 #include "vec-iter.hpp"
 #include "perlin.hpp"
 #include "smooth.hpp"
@@ -11,13 +12,13 @@
 #include <epoxy/gl.h>
 
 namespace nd {
-  uint make_test_texture () {
+  uint make_test_texture (WorkPool& pool) {
     using Rk::lerp;
 
     #ifndef NDEBUG
     int const dim = 8;
     #else
-    int const dim = 32;
+    int const dim = 512;
     #endif
 
     std::array<v3f, 3> const primaries {
@@ -29,7 +30,9 @@ namespace nd {
     uint tex;
     glGenTextures (1, &tex);
     glBindTexture (GL_TEXTURE_2D_ARRAY, tex);
-    glTexStorage3D (GL_TEXTURE_2D_ARRAY, 2, GL_RGB8, dim, dim, 256);
+    glTexStorage3D (GL_TEXTURE_2D_ARRAY, 4, GL_RGB8, dim, dim, 256);
+
+    std::vector<std::future<std::unique_ptr<v3f[]>>> futs;
 
     for (int i = 0; i != 256; i++) {
       int const
@@ -37,39 +40,35 @@ namespace nd {
         slab_depth = 256 / n_slabs,
         slab = i/slab_depth;
       float slab_rel = (1.f/slab_depth) * (i - slab_depth*slab);
-      v3f const
-        colour = unit (lerp (
-          primaries[ slab    % n_slabs],
-          primaries[(slab+1) % n_slabs],
-          slab_rel
-        )),
-        inv_colour = lerp (v3f{0,0,0}, v3f{1,1,1}, smoothstep (i*(1.f/256)));
+      v3f const colour = unit (lerp (
+        primaries[ slab    % n_slabs],
+        primaries[(slab+1) % n_slabs],
+        slab_rel
+      ));
 
-      v3f data [dim * dim];
-      int const s = 947441244;
-      VecHash h[3] { VecHash (s+i), VecHash (s+256+i), VecHash (s+512+i) };
+      auto fut = pool.nq ([colour, i, dim] (WorkPool& pool) {
+        auto data = std::make_unique<v3f[]> (dim*dim);
 
-      for (auto pos : vec_range (v2i{0,0}, v2i{dim,dim})) {
-        int const freq = 32;
-        v2f const noise_pos = pos * (float (freq) / dim);
-        v2f const off{0.37f,0.69f};
+        int const s = 947441244;
+        VecHash h[3] { VecHash (s+i), VecHash (s+256+i), VecHash (s+512+i) };
 
-        float const
-          k = 5.f/21 * perlin (h[0],   noise_pos+off,   freq)
-            + 7.f/21 * perlin (h[1], 2*noise_pos+off, 2*freq)
-            + 9.f/21 * perlin (h[2], 4*noise_pos+off, 4*freq);
+        for (auto pos : vec_range (v2i{0,0}, v2i{dim,dim})) {
+          int const freq = 32;
+          v2f const noise_pos = pos * (float (freq) / dim);
+          v2f const off{0.37f,0.69f};
 
-        data [pos.y*dim + pos.x] = (0.2f + 0.8f*k*k)*colour;
-      }
+          float const
+            k = 5.f/21 * perlin (h[0],   noise_pos+off,   freq)
+              + 7.f/21 * perlin (h[1], 2*noise_pos+off, 2*freq)
+              + 9.f/21 * perlin (h[2], 4*noise_pos+off, 4*freq);
 
-      glTexSubImage3D (
-        GL_TEXTURE_2D_ARRAY,
-        0,
-        0, 0, i,
-        dim, dim, 1,
-        GL_RGB,
-        GL_FLOAT, data
-      );
+          data [pos.y*dim + pos.x] = (0.2f + 0.8f*k*k)*colour;
+        }
+
+        return data;
+      });
+
+      futs.push_back (std::move (fut));
     }
 
     v2i constexpr const attribs[] {
@@ -81,6 +80,18 @@ namespace nd {
     };
     for (v2i attr : attribs)
       glTexParameteri (GL_TEXTURE_2D_ARRAY, attr.x, attr.y);
+
+    for (int i = 0; i != futs.size (); i++) {
+      auto data = futs[i].get ();
+      glTexSubImage3D (
+        GL_TEXTURE_2D_ARRAY,
+        0,
+        0, 0, i,
+        dim, dim, 1,
+        GL_RGB,
+        GL_FLOAT, data.get ()
+      );
+    }
 
     glGenerateMipmap (GL_TEXTURE_2D_ARRAY);
 

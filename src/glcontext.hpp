@@ -20,6 +20,7 @@ namespace nd {
     static GLContext establish (/*EGLNativeDisplayType,*/ EGLNativeWindowType);
     ~GLContext ();
     void flip ();
+  //GLContext share ();
   };
 }
 
