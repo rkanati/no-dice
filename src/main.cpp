@@ -15,6 +15,7 @@
 #include "frame.hpp"
 #include "stage.hpp"
 #include "types.hpp"
+#include "font.hpp"
 #include "xwin.hpp"
 #include "key.hpp"
 
@@ -24,6 +25,7 @@
 #include <cstdlib>
 
 #include <stdexcept>
+//#include <charconv>
 #include <iostream>
 #include <iomanip>
 #include <numeric>
@@ -188,7 +190,7 @@ namespace nd {
   float const fov = 75.f;
 
   class FrameCounter {
-    enum { n = 60 };
+    enum { n = 240 };
     double frame_times[n] = { };
     int i = 0;
 
@@ -216,6 +218,7 @@ namespace nd {
 
     auto source = make_test_chunk_source ();
     auto mesher = make_chunk_mesher ();
+    auto font_loader = make_font_loader ();
 
     WorkPool pool (4);
 
@@ -225,15 +228,22 @@ namespace nd {
     Stage stage (stage_radius);
     Player player (v3f {0.f, 0.f, 17.f});
     v2i mouse_prev;
-    double last_report = 0.;
 
     // transient state
     std::vector<v3i> scratch;
     Frame frame;
     FrameCounter frame_counter;
 
-    // test texture
+    // assets
     uint tex = make_test_texture (pool);
+
+    auto font = font_loader->load (
+      "/usr/share/fonts/OTF/OfficeCodePro-Medium.otf", 20);
+    auto const latin1 = CharRanges {
+      CharRange { 0x20, 0x7e },
+      CharRange { 0xa0, 0xff }
+    };
+    font->prime (latin1);
 
     // main loop
     for (;;) {
@@ -253,24 +263,28 @@ namespace nd {
         player.advance (syncer.time_step);
       }
 
-      // update fps
-      frame_counter.add_frame (frame_time);
-      if (syncer.frame_time () - last_report >= 0.25) {
-        std::cerr << "\r" << std::fixed << std::setprecision (1)
-                  << frame_counter.get_rate ();
-        last_report = syncer.frame_time ();
-      }
-
       // update stage
       update_stage (pool, stage, player.position (), *source, cache, scratch);
 
       // generate meshes
       sync_meshes (*mesher, stage, scratch);
 
-      // draw
+      // draw stage
       auto camera = lerp (player.prev_placement (), player.placement (), syncer.alpha ());
       Frustum frustum (camera, fov, host->aspect ());
       draw_stage (stage, frustum, frame);
+
+      // update fps
+      frame_counter.add_frame (frame_time);
+      char fps_buf[6];
+    /*auto fps_res = std::to_chars (
+        fps_buf, fps_buf+6,
+        frame_counter.get_rate (),
+        std::chars_format::fixed, 2
+      );*/
+      snprintf (fps_buf, 6, "%.1f", frame_counter.get_rate ());
+      auto fps_msg = font->bake (fps_buf);//StrRef (fps_buf, fps_res.ptr));
+      frame.add_rects (fps_msg.get_texture (), v2i{10,10}, fps_msg.begin (), fps_msg.end ());
 
       frame.set_frustum (frustum);
 
