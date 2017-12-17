@@ -86,9 +86,11 @@ namespace nd {
     }
   };
 
-  template<unsigned n, typename X>
-  static auto constexpr vec_range (vector<n, X> begin, vector<n, X> end) {
-    return VecRange<n, X> (begin, end);
+  namespace {
+    template<unsigned n, typename X>
+    auto constexpr vec_range (vector<n, X> begin, vector<n, X> end) {
+      return VecRange<n, X> (begin, end);
+    }
   }
 }
 

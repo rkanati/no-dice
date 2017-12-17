@@ -18,8 +18,6 @@ namespace nd {
   };
 
   struct ChunkData {
-    using Shared = SharePtr<ChunkData>;
-
     union {
       Block blocks [chunk_dim][chunk_dim][chunk_dim];
       Block flat [chunk_volume];

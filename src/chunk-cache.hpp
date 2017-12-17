@@ -19,8 +19,8 @@ namespace nd {
     ChunkCache ();
     ~ChunkCache ();
 
-    ChunkData::Shared load  (v3i chunk_pos) const;
-    void              store (v3i chunk_pos, ChunkData::Shared);
+    Shared<ChunkData> load  (v3i chunk_pos) const;
+    void              store (v3i chunk_pos, Shared<ChunkData>);
   };
 }
 

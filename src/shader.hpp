@@ -100,11 +100,13 @@ namespace nd {
 
   Shader load_shader (StrRef path, ShaderType type);
 
-  template<typename... Ss>
-  static inline ShaderProgram link (Ss... ss) {
-    ShaderLinker ln;
-    (ln << ... << std::move (ss));
-    return ln.link ();
+  namespace {
+    template<typename... Ss>
+    inline ShaderProgram link (Ss... ss) {
+      ShaderLinker ln;
+      (ln << ... << std::move (ss));
+      return ln.link ();
+    }
   }
 }
 

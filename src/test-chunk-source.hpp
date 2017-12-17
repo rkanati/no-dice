@@ -8,6 +8,6 @@
 #include "types.hpp"
 
 namespace nd {
-  SharePtr<ChunkSource> make_test_chunk_source ();
+  Shared<ChunkSource> make_test_chunk_source ();
 }
 

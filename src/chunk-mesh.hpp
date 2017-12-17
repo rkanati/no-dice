@@ -11,17 +11,16 @@
 
 namespace nd {
   struct ChunkMeshImpl;
-  using ChunkMesh = std::shared_ptr<ChunkMeshImpl>;
+  using ChunkMesh = Shared<ChunkMeshImpl>;
 
   using AdjChunkData = std::array<ChunkData const*, 4>;
 
   class ChunkMesher {
   public:
-    using Shared = std::shared_ptr<ChunkMesher>;
     virtual ChunkMesh build (AdjChunkData const&) = 0;
   };
 
-  auto make_chunk_mesher () -> ChunkMesher::Shared;
+  auto make_chunk_mesher () -> Shared<ChunkMesher>;
 
   class ChunkRenderer {
   public:
@@ -31,13 +30,12 @@ namespace nd {
       int z;
     };
 
-    using Shared = std::shared_ptr<ChunkRenderer>;
     virtual void draw (
       m4f const& w2c,
       std::vector<Item> const&
     ) = 0;
   };
 
-  auto make_chunk_renderer () -> ChunkRenderer::Shared;
+  auto make_chunk_renderer () -> Shared<ChunkRenderer>;
 }
 

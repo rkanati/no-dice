@@ -73,7 +73,7 @@ namespace nd {
     auto remesh (std::vector<v3i>& to_mesh)
       -> std::vector<v3i>&;
 
-    void update_data (ChunkData::Shared data, v3i pos) {
+    void update_data (Shared<ChunkData> data, v3i pos) {
       at_absolute (pos)->update_data (std::move (data), pos);
     }
 

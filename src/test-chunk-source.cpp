@@ -15,20 +15,20 @@
 namespace nd {
   class TestChunkSource final : public ChunkSource {
     VecHash hasher;
-    ChunkData::Shared empty_chunk, full_chunk;
+    Shared<ChunkData> empty_chunk, full_chunk;
 
     static auto make_empty_chunkdata () {
       ChunkData chunk;
       for (auto i : chunk.indices ())
         chunk[i] = 0;
-      return share (std::move (chunk));
+      return std::make_shared<ChunkData> (std::move (chunk));
     }
 
     static auto make_full_chunkdata () {
       ChunkData chunk;
       for (auto i : chunk.indices ())
         chunk[i] = 255;
-      return share (std::move (chunk));
+      return std::make_shared<ChunkData> (std::move (chunk));
     }
 
   public:
@@ -38,7 +38,7 @@ namespace nd {
       full_chunk (make_full_chunkdata ())
     { }
 
-    ChunkData::Shared get (vec3i pos) override {
+    Shared<ChunkData> get (vec3i pos) override {
       int constexpr const
         bedrock = -(256/chunk_dim),
         peaks   =  0;
@@ -55,13 +55,14 @@ namespace nd {
         // sample nested function
         auto noise = [this] (v2f x) {
           return
-              5.f/6 * perlin (hasher,      x                 )
-            + 1.f/6 * perlin (hasher, 11.3*x + v2f{0.5f,0.5f});
+              4.f/9 * perlin (hasher,     x                 )
+            + 3.f/9 * perlin (hasher, 2.f*x + v2f{0.3f,0.3f})
+            + 2.f/9 * perlin (hasher, 3.f*x + v2f{0.7f,0.7f});
         };
 
-        float const freq = 0.5f;
         using namespace Rk::swiz;
-        auto samples = take_grid_samples<2> (pos(X,Y)*freq, freq, noise);
+        auto samples = take_grid_samples<2> (
+          v2f (pos(X,Y)) + v2f{0.5f,0.5f}, 1.f, noise);
 
         for (auto i : chunk.indices ()) {
           float const
@@ -73,15 +74,15 @@ namespace nd {
           chunk[i] = alt < density? u8 (int (s_alt*254.f) + 1) : 0;
         }
 
-        return share (std::move (chunk));
+        return std::make_shared<ChunkData> (std::move (chunk));
       }
     }
 
-    void store (vec3i, ChunkData::Shared)
+    void store (vec3i, Shared<ChunkData>)
     { }
   };
 
-  SharePtr<ChunkSource> make_test_chunk_source () {
+  Shared<ChunkSource> make_test_chunk_source () {
     return std::make_shared<TestChunkSource> ();
   }
 }

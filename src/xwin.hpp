@@ -28,8 +28,7 @@ namespace nd {
       return ds.x / ds.y;
     }
 
-  //virtual auto egl_display () -> EGLNativeDisplayType = 0;
-    virtual auto egl_window  () -> EGLNativeWindowType = 0;
+    virtual auto egl_window () -> EGLNativeWindowType = 0;
 
     virtual auto keyboard () -> InputDevice* = 0;
     virtual auto pointer  () -> InputDevice* = 0;

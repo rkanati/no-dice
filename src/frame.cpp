@@ -47,7 +47,6 @@ namespace nd {
     auto w2c = e2c * w2e;
     glEnable (GL_DEPTH_TEST);
     glDisable (GL_BLEND);
-  //glDepthMask (true);
     chunk_renderer->draw (w2c, chunk_items);
     chunk_items.clear ();
 
@@ -63,7 +62,6 @@ namespace nd {
     glDisable (GL_DEPTH_TEST);
     glEnable (GL_BLEND);
     glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  //glDepthMask (false);
     std::sort (ui_items.begin (), ui_items.end ());
     glUniform2f (1, 2.f/dims.x, 2.f/dims.y);
     uint prev_texture = 0;

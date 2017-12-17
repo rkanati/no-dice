@@ -38,15 +38,16 @@
 namespace nd {
   uint make_test_texture (WorkPool&);
 
+namespace {
   void configure_gl () {
     glLineWidth (3.f);
     glEnable (GL_CULL_FACE);
     glEnable (GL_DEPTH_TEST);
   }
 
-  static bool mouse_look = false;
-  static v2i  mouse_prev = nil;
-  static bool wireframe = false;
+  bool mouse_look = false;
+  v2i  mouse_prev = nil;
+  bool wireframe = false;
 
   void update_input (InputFrame const& input, XHost& host, Player& player) {
     v2i mouse_delta {0,0};
@@ -189,7 +190,7 @@ namespace nd {
 
   float const fov = 75.f;
 
-  class FrameCounter {
+/*class FrameCounter {
     enum { n = 240 };
     double frame_times[n] = { };
     int i = 0;
@@ -208,7 +209,7 @@ namespace nd {
       );
       return n / total;
     }
-  };
+  };*/
 
   void run () {
     // subsystems
@@ -232,13 +233,14 @@ namespace nd {
     // transient state
     std::vector<v3i> scratch;
     Frame frame;
-    FrameCounter frame_counter;
+  //FrameCounter frame_counter;
+    double avg_frame_time = 0.f;
 
     // assets
     uint tex = make_test_texture (pool);
 
     auto font = font_loader->load (
-      "/usr/share/fonts/OTF/OfficeCodePro-Medium.otf", 20);
+      "/usr/share/fonts/OTF/OfficeCodeProD-Regular.otf", 16);
     auto const latin1 = CharRanges {
       CharRange { 0x20, 0x7e },
       CharRange { 0xa0, 0xff }
@@ -270,21 +272,19 @@ namespace nd {
       sync_meshes (*mesher, stage, scratch);
 
       // draw stage
-      auto camera = lerp (player.prev_placement (), player.placement (), syncer.alpha ());
+      auto camera = lerp (
+        player.prev_placement (), player.placement (), syncer.alpha ());
       Frustum frustum (camera, fov, host->aspect ());
       draw_stage (stage, frustum, frame);
 
       // update fps
-      frame_counter.add_frame (frame_time);
-      char fps_buf[6];
-    /*auto fps_res = std::to_chars (
-        fps_buf, fps_buf+6,
-        frame_counter.get_rate (),
-        std::chars_format::fixed, 2
-      );*/
-      snprintf (fps_buf, 6, "%.1f", frame_counter.get_rate ());
-      auto fps_msg = font->bake (fps_buf);//StrRef (fps_buf, fps_res.ptr));
-      frame.add_rects (fps_msg.get_texture (), v2i{10,10}, fps_msg.begin (), fps_msg.end ());
+      { double const constexpr n = 10.;
+        avg_frame_time = ((n - 1.)/n)*avg_frame_time + (1./n)*frame_time;
+        char fps_buf[6];
+        snprintf (fps_buf, 6, "%3.1f", 1./avg_frame_time);
+        auto fps_msg = font->bake (fps_buf);
+        draw_text (frame, fps_msg, v2i{10,10});
+      }
 
       frame.set_frustum (frustum);
 
@@ -294,15 +294,18 @@ namespace nd {
     }
   }
 }
+} // nd
 
-void show_exception (std::exception const& e) {
-  std::cerr << "Exception:\n" << e.what () << "\n";
+namespace {
+  void show_exception (std::exception const& e) {
+    std::cerr << "Exception:\n" << e.what () << "\n";
 
-  try {
-    std::rethrow_if_nested (e);
-  }
-  catch (std::exception const& e) {
-    show_exception (e);
+    try {
+      std::rethrow_if_nested (e);
+    }
+    catch (std::exception const& e) {
+      show_exception (e);
+    }
   }
 }
 

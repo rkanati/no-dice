@@ -13,50 +13,52 @@
 #include <epoxy/gl.h>
 
 namespace nd {
-  #ifndef NDEBUG
-  static void handle_gl_debug (
-    GLenum src, GLenum type, uint id, GLenum level,
-    GLsizei length, char const* msg,
-    void const*)
-  {
-    std::cerr << "GL: " << msg << "\n";
+  namespace {
+    #ifndef NDEBUG
+    static void handle_gl_debug (
+      GLenum src, GLenum type, uint id, GLenum level,
+      GLsizei length, char const* msg,
+      void const*)
+    {
+      std::cerr << "GL: " << msg << "\n";
+    }
+    #endif
   }
-  #endif
 
   GLContext GLContext::establish (EGLNativeWindowType nat_win) {
     using namespace std::string_literals;
 
-    auto ok = eglBindAPI (EGL_OPENGL_API);
-    if (!ok)
+    if (!eglBindAPI (EGL_OPENGL_API))
       throw std::runtime_error ("eglBindAPI failed");
 
-    auto egl_disp = eglGetDisplay (EGL_DEFAULT_DISPLAY);//(nat_disp);
+    auto egl_disp = eglGetDisplay (EGL_DEFAULT_DISPLAY);
     if (egl_disp == EGL_NO_DISPLAY)
       throw std::runtime_error ("eglGetDisplay failed");
 
-    int dummy;
-    ok = eglInitialize (egl_disp, &dummy, &dummy);
-    if (!ok)
-      throw std::runtime_error ("eglInitialize failed");
-
-    static const int config_attrs[] = {
-      EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
-      EGL_BUFFER_SIZE,       32,
-      EGL_DEPTH_SIZE,        24,
-      EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
-      EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
-      EGL_SAMPLE_BUFFERS,    1,
-      EGL_SAMPLES,           4,
-      EGL_NONE
-    };
+    { int dummy;
+      if (!eglInitialize (egl_disp, &dummy, &dummy))
+        throw std::runtime_error ("eglInitialize failed");
+    }
 
     EGLConfig config;
-    int config_count = 0;
-    ok = eglChooseConfig (egl_disp, config_attrs, &config, 1, &config_count);
-    if (!ok || config_count == 0)
-      throw std::runtime_error ("eglChooseConfig failed");
+    { int constexpr const attrs[] {
+        EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
+        EGL_BUFFER_SIZE,       32,
+        EGL_DEPTH_SIZE,        24,
+        EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
+        EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
+        EGL_SAMPLE_BUFFERS,    1,
+        EGL_SAMPLES,           4,
+        EGL_NONE
+      };
 
-    static const int context_attrs[] = {
+      int n_configs = 0;
+      auto ok = eglChooseConfig (egl_disp, attrs, &config, 1, &n_configs);
+      if (!ok || n_configs == 0)
+        throw std::runtime_error ("eglChooseConfig failed");
+    }
+
+    int constexpr const context_attrs[] {
       EGL_CONTEXT_MAJOR_VERSION, 4,
       EGL_CONTEXT_MINOR_VERSION, 3,
     #ifndef NDEBUG
@@ -65,22 +67,23 @@ namespace nd {
       EGL_NONE
     };
 
-    auto egl_ctx = eglCreateContext (egl_disp, config, EGL_NO_CONTEXT, context_attrs);
+    auto egl_ctx = eglCreateContext (
+      egl_disp, config, EGL_NO_CONTEXT, context_attrs);
     if (!egl_ctx)
       throw std::runtime_error ("eglCreateContext failed");
 
-    static const int surf_attrs[] = {
+    int constexpr const surf_attrs[] {
       EGL_RENDER_BUFFER, EGL_BACK_BUFFER,
       EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
       EGL_NONE
     };
 
-    auto egl_surf = eglCreateWindowSurface (egl_disp, config, nat_win, surf_attrs);
+    auto egl_surf = eglCreateWindowSurface (
+      egl_disp, config, nat_win, surf_attrs);
     if (!egl_surf)
       throw std::runtime_error ("eglCreateWindowSurface failed");
 
-    ok = eglMakeCurrent (egl_disp, egl_surf, egl_surf, egl_ctx);
-    if (!ok)
+    if (!eglMakeCurrent (egl_disp, egl_surf, egl_surf, egl_ctx))
       throw std::runtime_error ("eglMakeCurrent failed");
 
     glEnable (GL_FRAMEBUFFER_SRGB);

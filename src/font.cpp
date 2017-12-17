@@ -293,7 +293,7 @@ namespace nd {
       FT_Done_FreeType (ft);
     }
 
-    Font::Shared load (StrRef path, int size_px) override {
+    Shared<Font> load (StrRef path, int size_px) override {
       FT_Face face;
       { auto const path_str = to_string (path);
         if (FT_New_Face (ft, path_str.c_str (), 0, &face))
@@ -313,7 +313,7 @@ namespace nd {
     }
   };
 
-  FontLoader::Shared make_font_loader () {
+  Shared<FontLoader> make_font_loader () {
     return std::make_shared<FontLoaderImpl> ();
   }
 }

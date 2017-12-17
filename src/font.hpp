@@ -44,6 +44,12 @@ namespace nd {
     }
   };
 
+  namespace {
+    inline void draw_text (Frame& frame, TextRun const& text, v2i const pos) {
+      frame.add_rects (text.get_texture (), pos, text.begin (), text.end ());
+    }
+  }
+
   struct CharRange {
     u32 first, last;
     struct Iter {
@@ -61,17 +67,15 @@ namespace nd {
 
   class Font {
   public:
-    using Shared = std::shared_ptr<Font>;
     virtual void prime (CharRanges const&) = 0;
     virtual TextRun bake (StrRef text) = 0;
   };
 
   class FontLoader {
   public:
-    using Shared = std::shared_ptr<FontLoader>;
-    virtual Font::Shared load (StrRef path, int size_px) = 0;
+    virtual Shared<Font> load (StrRef path, int size_px) = 0;
   };
 
-  FontLoader::Shared make_font_loader ();
+  Shared<FontLoader> make_font_loader ();
 }
 

@@ -25,7 +25,7 @@ namespace nd {
   };
 
   class Frame {
-    ChunkRenderer::Shared chunk_renderer;
+    Shared<ChunkRenderer> chunk_renderer;
 
     ShaderProgram ui_prog;
     uint ui_vao, ui_buf;

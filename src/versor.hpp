@@ -6,4 +6,3 @@
 
 #include <Rk/versor.hpp>
 
-

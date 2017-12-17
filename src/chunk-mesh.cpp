@@ -71,7 +71,7 @@ namespace nd {
     ~ChunkMesherImpl ();
   };
 
-  auto make_chunk_mesher () -> ChunkMesher::Shared {
+  auto make_chunk_mesher () -> Shared<ChunkMesher> {
     return std::make_shared<ChunkMesherImpl> ();
   }
 
@@ -298,7 +298,7 @@ namespace nd {
     ~ChunkRendererImpl ();
   };
 
-  auto make_chunk_renderer () -> ChunkRenderer::Shared {
+  auto make_chunk_renderer () -> Shared<ChunkRenderer> {
     return std::make_shared<ChunkRendererImpl> ();
   }
 

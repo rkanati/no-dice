@@ -20,7 +20,7 @@ namespace nd {
       meshed       = 4
     } state = dead;
 
-    ChunkData::Shared data;
+    Shared<ChunkData> data;
     ChunkMesh         mesh;
     v3i               position;
 
@@ -56,7 +56,7 @@ namespace nd {
         state = loaded;
     }
 
-    ChunkData::Shared get_data (v3i want_pos) const {
+    Shared<ChunkData> get_data (v3i want_pos) const {
       if (state >= loaded && position == want_pos) return data;
       else return nullptr;
     }
@@ -66,7 +66,7 @@ namespace nd {
       else return nullptr;
     }
 
-    void update_data (ChunkData::Shared new_data, v3i data_pos) {
+    void update_data (Shared<ChunkData> new_data, v3i data_pos) {
       if (!new_data || state != pending_data || data_pos != position) {
         std::cerr << "Rejecting data " << position << "<-" << data_pos << "\n";
         return;

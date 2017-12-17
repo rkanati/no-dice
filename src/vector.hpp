@@ -23,12 +23,14 @@ namespace nd {
     }
   };
 
-  template<typename OS, uint n, typename T>
-  static OS& operator << (OS& os, Rk::vector<n, T> v) {
-    os << "(";
-    for (int i = 0; i != n-1; i++)
-      os << v[i] << " ";
-    return os << v[n-1] << ")";
+  namespace {
+    template<typename OS, uint n, typename T>
+    OS& operator << (OS& os, Rk::vector<n, T> v) {
+      os << "(";
+      for (int i = 0; i != n-1; i++)
+        os << v[i] << " ";
+      return os << v[n-1] << ")";
+    }
   }
 }
 
