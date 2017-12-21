@@ -147,7 +147,7 @@ namespace {
     ChunkMesher& mesher,
     Stage& stage,
     std::vector<v3i>& scratch,
-    int limit = 10)
+    int limit = 5)
   {
     auto to_mesh = stage.remesh (scratch);
 
@@ -183,33 +183,12 @@ namespace {
 
   // parameters
 #ifndef NDEBUG
-  auto const stage_radius = 64;
+  auto const stage_radius = 256;
 #else
   auto const stage_radius = 512;
 #endif
 
   float const fov = 75.f;
-
-/*class FrameCounter {
-    enum { n = 240 };
-    double frame_times[n] = { };
-    int i = 0;
-
-  public:
-    void add_frame (double t) {
-      frame_times[i++] = t;
-      i %= n;
-    }
-
-    double get_rate () const {
-      double total = std::accumulate (
-        std::begin (frame_times),
-        std::end (frame_times),
-        0.
-      );
-      return n / total;
-    }
-  };*/
 
   void run () {
     // subsystems
@@ -233,19 +212,18 @@ namespace {
     // transient state
     std::vector<v3i> scratch;
     Frame frame;
-  //FrameCounter frame_counter;
     double avg_frame_time = 0.f;
 
     // assets
     uint tex = make_test_texture (pool);
 
-    auto font = font_loader->load (
-      "/usr/share/fonts/OTF/OfficeCodeProD-Regular.otf", 16);
-    auto const latin1 = CharRanges {
-      CharRange { 0x20, 0x7e },
-      CharRange { 0xa0, 0xff }
-    };
+    /*auto font = font_loader->load_scalable (
+      "/usr/share/fonts/OTF/OfficeCodeProD-Regular.otf", 20);*/
+    auto font = font_loader->load_scalable (
+      "/usr/share/fonts/TTF/LiberationMono-Regular.ttf");
+    auto const latin1 = CharRanges { CharRange {0x00, 0xff} };
     font->prime (latin1);
+    font->fix ();
 
     // main loop
     for (;;) {
@@ -278,12 +256,12 @@ namespace {
       draw_stage (stage, frustum, frame);
 
       // update fps
-      { double const constexpr n = 10.;
+      { double const constexpr n = 40.;
         avg_frame_time = ((n - 1.)/n)*avg_frame_time + (1./n)*frame_time;
         char fps_buf[6];
-        snprintf (fps_buf, 6, "%3.1f", 1./avg_frame_time);
+        snprintf (fps_buf, 6, "%5.1f", 1./avg_frame_time);
         auto fps_msg = font->bake (fps_buf);
-        draw_text (frame, fps_msg, v2i{10,10});
+        draw_text (frame, fps_msg, v2i{10,10}, 0.5f);
       }
 
       frame.set_frustum (frustum);
@@ -292,6 +270,8 @@ namespace {
       frame.draw (host->dims (), syncer.frame_time (), syncer.alpha ());
       gl_ctx.flip ();
     }
+
+    font->dump ("font-dump.ppm");
   }
 }
 } // nd

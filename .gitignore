@@ -9,4 +9,5 @@ gmon.out
 *~
 __pycache__/
 *.py
+*.ppm
 

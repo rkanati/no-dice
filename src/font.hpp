@@ -45,8 +45,10 @@ namespace nd {
   };
 
   namespace {
-    inline void draw_text (Frame& frame, TextRun const& text, v2i const pos) {
-      frame.add_rects (text.get_texture (), pos, text.begin (), text.end ());
+    inline void draw_text (
+      Frame& frame, TextRun const& text, v2i const pos, float k)
+    {
+      frame.add_rects (text.get_texture (), pos, text.begin (), text.end (), k);
     }
   }
 
@@ -68,12 +70,15 @@ namespace nd {
   class Font {
   public:
     virtual void prime (CharRanges const&) = 0;
+    virtual void fix () = 0;
     virtual TextRun bake (StrRef text) = 0;
+    virtual void dump (StrRef path) = 0;
   };
 
   class FontLoader {
   public:
     virtual Shared<Font> load (StrRef path, int size_px) = 0;
+    virtual Shared<Font> load_scalable (StrRef path) = 0;
   };
 
   Shared<FontLoader> make_font_loader ();

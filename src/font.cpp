@@ -6,9 +6,11 @@
 
 #include "bin-pack.hpp"
 
+#include <Rk/clamp.hpp>
 #include <Rk/guard.hpp>
 
 #include <iostream>
+#include <fstream>
 #include <map>
 #include <set>
 
@@ -21,10 +23,11 @@
 #include <epoxy/gl.h>
 
 namespace nd {
+  enum class FontMode { fixed, scalable };
+
   namespace {
     struct AtlasRect {
-      int width;//  () const { return abs (max (tcs[1] - tcs[0])); }
-      int height;// () const { return abs (max (tcs[2] - tcs[1])); }
+      int width, height;
       v2i tcs[4];
       explicit operator bool () const {
         return width != 0 && height != 0;
@@ -53,24 +56,125 @@ namespace nd {
       v2i bearings;
     };
 
-    Bitmap pack_bitmap (
-      u8 const* src, int sp,
-      int sw, int sh,
-      bool rotate, bool flip = false)
-    {
-      std::vector<u8> dest (sw*sh);
-
-      int const
-        dw = rotate? sh : sw,
-        dh = rotate? sw : sh;
+  /*Bitmap bitmap_from_ft_mono (FT_Bitmap const& src) {
+      int const dw = src.width, dh = src.rows;
+      std::vector<u8> dest (dw*dh);
 
       for (int dy = 0; dy != dh; dy++) {
         for (int dx = 0; dx != dw; dx++) {
           int const
-            sx = rotate? dy      : dx,
-            sy = rotate? dw-dx-1 : dy,
-            dr = flip? dh-dy-1 : dy;
-          dest[dr*dw + dx] = src[sy*sp + sx];
+            sxo = dx >> 3,
+            sxs = dx & 7,
+            sy = dy,
+            dr = dh-dy-1;
+          u8 const s = src.buffer[sy*src.pitch + sxo];
+          dest[dr*dw + dx] = ((s << sxs) & 0x80)? 0xff : 0x00;
+        }
+      }
+
+      return { std::move (dest), dw, dh };
+    }*/
+
+    Bitmap bitmap_from_ft_grey (FT_Bitmap const& src) {
+      int const dw = src.width, dh = src.rows;
+      std::vector<u8> dest (dw*dh);
+
+      for (int dy = 0; dy != dh; dy++) {
+        for (int dx = 0; dx != dw; dx++) {
+          int const sx = dx, sy = dy, dr = dh-dy-1;
+          dest[dr*dw + dx] = src.buffer[sy*src.pitch + sx];
+        }
+      }
+
+      return { std::move (dest), dw, dh };
+    }
+
+    Bitmap bitmap_rotate (Bitmap const& src) {
+      std::vector<u8> dest (src.pixels.size ());
+
+      int const dw = src.height, dh = src.width;
+
+      for (int dy = 0; dy != dh; dy++) {
+        for (int dx = 0; dx != dw; dx++) {
+          int const sx = dy, sy = dw-dx-1;
+          dest[dy*dw + dx] = src.pixels[sy*src.width + sx];
+        }
+      }
+
+      return { std::move (dest), dw, dh };
+    }
+
+    Bitmap bitmap_expand (Bitmap const& src, int r, u8 fill = 0x00) {
+      int const
+        dw = src.width  + 2*r,
+        dh = src.height + 2*r;
+      std::vector<u8> dest (dw*dh, fill);
+
+      for (int sy = 0; sy != src.height; sy++) {
+        for (int sx = 0; sx != src.width; sx++) {
+          int const
+            dx = sx + r,
+            dy = sy + r;
+          dest[dy*dw + dx] = src.pixels[sy*src.width + sx];
+        }
+      }
+
+      return { std::move (dest), dw, dh };
+    }
+
+    Bitmap bitmap_distfield (Bitmap src, int r) {
+      src = bitmap_expand (std::move (src), r);
+
+      int const dw = src.width, dh = src.height;
+      std::vector<u8> df (dw*dh);
+
+      for (int dy = 0; dy != dh; dy++) {
+        for (int dx = 0; dx != dw; dx++) {
+          bool const inside = src.pixels[dy*src.width + dx] > 0x7f;
+          float min_dist = 100000.f;
+          for (int
+            sy  = std::max (0,          dy-r);
+            sy != std::min (src.height, dy+r+1);
+            sy++)
+          {
+            for (int
+              sx  = std::max (0,         dx-r);
+              sx != std::min (src.width, dx+r+1);
+              sx++)
+            {
+              bool const other_inside = src.pixels[sy*src.width + sx] > 0x7f;
+              if (inside == other_inside)
+                continue;
+
+              float const dist = abs (v2f {float(sx-dx), float(sy-dy)});
+              min_dist = std::min (min_dist, dist);
+            }
+          }
+
+          float const
+            k = 1.f / std::sqrt (2*r*r),
+            out = 0.5f + 0.5f*k*(inside? (min_dist-1.f) : -min_dist);
+          df [dy*dw + dx] = 255.f*Rk::clamp (out, 0.f, 1.f);
+        }
+      }
+
+      return { std::move (df), dw, dh };
+    }
+
+    Bitmap bitmap_reduce (Bitmap const& src, int k) {
+      int const
+        dw = src.width  / k,
+        dh = src.height / k;
+      std::vector<u8> dest (dw*dh);
+
+      for (int dy = 0; dy != dh; dy++) {
+        for (int dx = 0; dx != dw; dx++) {
+          u32 acc = 0;
+          for (int sy = dy*k; sy != (dy+1)*k; sy++) {
+            for (int sx = dx*k; sx != (dx+1)*k; sx++)
+              acc += src.pixels[sy*src.width + sx];
+          }
+          dest[dy*dw + dx] = acc/(k*k);
         }
       }
 
@@ -81,22 +185,39 @@ namespace nd {
   class FontImpl final : public Font {
     FT_Face face;
     hb_font_t* hb;
+    FontMode mode;
+    int scale;
     Rk::RectPacker packer;
     uint glname;
     std::map<uint, LoadedGlyph> loaded;
 
     LoadingGlyph load_glyph (uint const index) {
       // load and render
-      if (FT_Load_Glyph (face, index, FT_LOAD_RENDER))
+      auto const flags = (mode == FontMode::scalable)
+        ? FT_LOAD_TARGET_LIGHT//FT_LOAD_TARGET_MONO
+        : FT_LOAD_TARGET_NORMAL;
+      if (FT_Load_Glyph (face, index, flags | FT_LOAD_RENDER))
         throw std::runtime_error ("FT_Load_Glyph failed");
 
       auto const& src = face->glyph->bitmap;
-      auto bmp = pack_bitmap (
-        src.buffer, src.pitch, (int) src.width, (int) src.rows, false, true);
+
+      Bitmap bmp;
+      int r;
+      if (mode == FontMode::scalable) {
+        r = 15;
+      //bmp = bitmap_from_ft_mono (src);
+        bmp = bitmap_from_ft_grey (src);
+        bmp = bitmap_distfield (std::move (bmp), r);
+        bmp = bitmap_reduce (std::move (bmp), scale);
+      }
+      else {
+        r = 0;
+        bmp = bitmap_from_ft_grey (src);
+      }
 
       v2i const bearings {
-        face->glyph->bitmap_left,
-        face->glyph->bitmap_top - bmp.height
+        face->glyph->bitmap_left/scale - r,
+        face->glyph->bitmap_top /scale - bmp.height + r
       };
 
       return { std::move (bmp), bearings };
@@ -110,24 +231,24 @@ namespace nd {
 
     LoadedGlyph pack_glyph (uint const index, LoadingGlyph g) {
       // try to pack the glyph into the atlas
-      v2i const dims { g.bitmap.width, g.bitmap.height };
-      auto const [ok, rotated, where] = packer.add (dims);
+      v2i const dims = v2i {
+        g.bitmap.width  + alignment () - 1,
+        g.bitmap.height + alignment () - 1
+      } / alignment ();
+      auto const [ok, rotated, where_scaled] = packer.add (dims);
+      auto const where = Rk::Rect::with_corners (
+        where_scaled.mins () * alignment (),
+        where_scaled.maxs () * alignment ()
+      );
       if (!ok) {
         std::cerr << "Failed to pack glyph\n";
         return get_glyph (0); // FIXME: is this u+fffd?
       }
 
-      // zero-area glyphs don't even occupy the atlas
-      if (where) {
+      if (where) { // zero-area glyphs don't even occupy the atlas
         // rotate glyph if necessary
-        if (rotated) {
-          g.bitmap = pack_bitmap (
-            g.bitmap.pixels.data (),
-            g.bitmap.width,
-            g.bitmap.width, g.bitmap.height,
-            true
-          );
-        }
+        if (rotated)
+          g.bitmap = bitmap_rotate (std::move (g.bitmap));
 
         // upload glyph
         glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
@@ -173,19 +294,29 @@ namespace nd {
       return pack_glyph (index, load_glyph (index));
     }
 
-    enum { w = 1024, h = w };
+    enum {
+      w = 4096,
+      h = w,
+      n_levels = 4
+    };
+
+    int alignment () const {
+      if (mode == FontMode::scalable) return 1 << (n_levels - 1);
+      else return 1;
+    }
 
   public:
-    FontImpl (FT_Face face, hb_font_t* hb) :
-      face (face), hb (hb),
-      packer (v2i {w,h})
+    FontImpl (FT_Face face, hb_font_t* hb, FontMode mode, int scale) :
+      face (face), hb (hb), mode (mode), scale (scale),
+      packer (v2i { w / alignment (), h / alignment () })
     {
       glCreateTextures (GL_TEXTURE_2D, 1, &glname);
-      glTextureStorage2D (glname, 1, GL_R8, w, h);
-      glClearTexImage (glname, 0, GL_RED, GL_UNSIGNED_BYTE, "\x7f");
+      int nl = (mode==FontMode::scalable)? n_levels : 1;
+      glTextureStorage2D (glname, nl, GL_R8, w, h);
+      glClearTexImage (glname, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);//"\x7f");
 
       v2i constexpr const attribs[] {
-        { GL_TEXTURE_MIN_FILTER, GL_LINEAR },
+        { GL_TEXTURE_MIN_FILTER, GL_NEAREST },
         { GL_TEXTURE_MAG_FILTER, GL_NEAREST },
         { GL_TEXTURE_WRAP_S,     GL_CLAMP_TO_EDGE },
         { GL_TEXTURE_WRAP_T,     GL_CLAMP_TO_EDGE }
@@ -193,7 +324,7 @@ namespace nd {
       for (v2i attr : attribs)
         glTextureParameteri (glname, attr.x, attr.y);
 
-      get_glyph (0);
+      get_glyph (cp_to_glyph (0xfffd));
     }
 
     ~FontImpl () {
@@ -227,6 +358,17 @@ namespace nd {
         pack_glyph (load.first, std::move (load.second));
     }
 
+    void fix () override {
+      v2i constexpr const attribs[] {
+        { GL_TEXTURE_MAX_LEVEL,  n_levels - 1 },
+        { GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR },
+        { GL_TEXTURE_MAG_FILTER, GL_LINEAR }
+      };
+      for (v2i attr : attribs)
+        glTextureParameteri (glname, attr.x, attr.y);
+      glGenerateTextureMipmap (glname);
+    }
+
     TextRun bake (StrRef str) override {
       auto* const buf = hb_buffer_create ();
       auto buf_guard = Rk::guard ([buf] { hb_buffer_destroy (buf); });
@@ -249,8 +391,8 @@ namespace nd {
 
           auto const& m = mets[i];
           v2i const
-            offs {m.x_offset,  m.y_offset},
-            advs {m.x_advance, m.y_advance};
+            offs = v2i {m.x_offset,  m.y_offset } / scale,
+            advs = v2i {m.x_advance, m.y_advance} / scale;
 
           if (index != 0) {
             LoadedGlyph const g = get_glyph (index);
@@ -278,10 +420,40 @@ namespace nd {
 
       return run;
     }
+
+    void dump (StrRef path) override {
+      std::vector<u8> pixels (w*h);
+      glPixelStorei (GL_PACK_ALIGNMENT, 1);
+      glGetTextureImage (
+        glname, 0,
+        GL_RED, GL_UNSIGNED_BYTE, pixels.size (), pixels.data ());
+      std::ofstream f (to_string (path));
+      f << "P5\n" << w << " " << h << "\n255\n";
+      f.write ((char const*) pixels.data (), pixels.size ());
+    }
   };
 
   class FontLoaderImpl final : public FontLoader {
     FT_Library ft;
+
+    Shared<Font> load_impl (StrRef path, int px, int reduce, FontMode mode) {
+      FT_Face face;
+      { auto const path_str = to_string (path);
+        if (FT_New_Face (ft, path_str.c_str (), 0, &face))
+          throw std::runtime_error ("FT_New_Face failed");
+      }
+      auto face_guard = Rk::guard ([face] { FT_Done_Face (face); });
+
+      if (FT_Set_Pixel_Sizes (face, px, px))
+        throw std::runtime_error ("FT_Set_Pixel_Sizes failed");
+
+      hb_font_t* const hb_font = hb_ft_font_create_referenced (face);
+      if (!hb_font)
+        throw std::runtime_error ("hb_ft_font_create_referenced failed");
+
+      face_guard.relieve ();
+      return std::make_shared<FontImpl> (face, hb_font, mode, reduce);
+    }
 
   public:
     FontLoaderImpl () {
@@ -294,22 +466,11 @@ namespace nd {
     }
 
     Shared<Font> load (StrRef path, int size_px) override {
-      FT_Face face;
-      { auto const path_str = to_string (path);
-        if (FT_New_Face (ft, path_str.c_str (), 0, &face))
-          throw std::runtime_error ("FT_New_Face failed");
-      }
-      auto face_guard = Rk::guard ([face] { FT_Done_Face (face); });
+      return load_impl (path, size_px, 1, FontMode::fixed);
+    }
 
-      if (FT_Set_Pixel_Sizes (face, size_px, size_px))
-        throw std::runtime_error ("FT_Set_Pixel_Sizes failed");
-
-      hb_font_t* const hb_font = hb_ft_font_create_referenced (face);
-      if (!hb_font)
-        throw std::runtime_error ("hb_ft_font_create_referenced failed");
-
-      face_guard.relieve ();
-      return std::make_shared<FontImpl> (face, hb_font);
+    Shared<Font> load_scalable (StrRef path) override {
+      return load_impl (path, 256, 4, FontMode::scalable);
     }
   };
 

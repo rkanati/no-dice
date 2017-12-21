@@ -26,8 +26,13 @@ namespace nd {
     glVertexArrayVertexBuffer (ui_vao, 1, ui_buf, 0, 16);
 
     ui_prog = link (
-      load_shader ("assets/shaders/ui.vert", ShaderType::vertex),
-      load_shader ("assets/shaders/ui.frag", ShaderType::fragment)
+      load_shader ("assets/shaders/ui.vert",     ShaderType::vertex),
+      load_shader ("assets/shaders/simple.frag", ShaderType::fragment)
+    );
+
+    hud_prog = link (
+      load_shader ("assets/shaders/hud.vert",    ShaderType::vertex),
+      load_shader ("assets/shaders/dfield.frag", ShaderType::fragment)
     );
   }
 
@@ -50,30 +55,56 @@ namespace nd {
     chunk_renderer->draw (w2c, chunk_items);
     chunk_items.clear ();
 
-    // render ui
-    ui_prog.use ();
-    glBindVertexArray (ui_vao);
-    glNamedBufferData (
-      ui_buf,
-      sizeof (UIRect) * ui_rects.size (), ui_rects.data (),
-      GL_DYNAMIC_DRAW
-    );
-
-    glDisable (GL_DEPTH_TEST);
-    glEnable (GL_BLEND);
-    glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    std::sort (ui_items.begin (), ui_items.end ());
-    glUniform2f (1, 2.f/dims.x, 2.f/dims.y);
-    uint prev_texture = 0;
-    for (auto const& item : ui_items) {
-      if (item.texture != prev_texture)
-        glBindTexture (GL_TEXTURE_2D, item.texture);
-      glUniform2f (2, item.pos.x, item.pos.y);
-      prev_texture = item.texture;
-      glDrawArrays (GL_TRIANGLES, item.begin*6, item.count*6);
+    // render hud
+    { hud_prog.use ();
+      glBindVertexArray (hud_vao);
+      glNamedBufferData (
+        hud_buf,
+        sizeof (UIRect) * hud_rects.size (), hud_rects.data (),
+        GL_DYNAMIC_DRAW
+      );
+      glEnable (GL_BLEND);
+      glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      std::sort (hud_items.begin (), hud_items.end ());
+      uint prev_texture = 0;
+      for (auto const& item : hud_items) {
+        if (item.texture != prev_texture)
+          glBindTexture (GL_TEXTURE_2D, item.texture);
+        glUniform2f (1, item.k, item.k);
+        glUniform2fv (2, item.pos.components);
+        prev_texture = item.texture;
+        glDrawArrays (GL_TRIANGLES, item.begin*6, item.count*6);
+      }
+      hud_items.clear ();
+      hud_rects.clear ();
     }
-    ui_items.clear ();
-    ui_rects.clear ();
+
+    // render ui
+    { ui_prog.use ();
+      glBindVertexArray (ui_vao);
+      glNamedBufferData (
+        ui_buf,
+        sizeof (UIRect) * ui_rects.size (), ui_rects.data (),
+        GL_DYNAMIC_DRAW
+      );
+      glDisable (GL_DEPTH_TEST);
+      glEnable (GL_BLEND);
+      glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      std::sort (ui_items.begin (), ui_items.end ());
+      v2f const ui_scale { 2.f/dims.x, 2.f/dims.y };
+      uint prev_texture = 0;
+      for (auto const& item : ui_items) {
+        if (item.texture != prev_texture)
+          glBindTexture (GL_TEXTURE_2D, item.texture);
+        v2f const scale = item.k * ui_scale;
+        glUniform2f (1, scale.x,    scale.y);
+        glUniform2f (2, item.pos.x, item.pos.y);
+        prev_texture = item.texture;
+        glDrawArrays (GL_TRIANGLES, item.begin*6, item.count*6);
+      }
+      ui_items.clear ();
+      ui_rects.clear ();
+    }
   }
 }
 

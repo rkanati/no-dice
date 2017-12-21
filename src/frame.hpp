@@ -36,6 +36,7 @@ namespace nd {
 
     struct UIItem {
       v2i  pos;
+      float k;
       uint texture, begin, count;
       bool operator < (UIItem const& other) const {
         if (texture < other.texture)
@@ -62,10 +63,11 @@ namespace nd {
 
     void add_rects (
       uint const texture, v2i const pos,
-      UIRect const* const begin, UIRect const* const end)
+      UIRect const* const begin, UIRect const* const end,
+      float k = 1.f)
     {
       ui_items.push_back (
-        UIItem { pos, texture, (uint) ui_rects.size (), uint (end-begin) }
+        UIItem { pos, k, texture, (uint) ui_rects.size (), uint (end-begin) }
       );
 
       ui_rects.insert (ui_rects.end (), begin, end);

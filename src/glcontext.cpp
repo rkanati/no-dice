@@ -15,12 +15,45 @@
 namespace nd {
   namespace {
     #ifndef NDEBUG
-    static void handle_gl_debug (
-      GLenum src, GLenum type, uint id, GLenum level,
-      GLsizei length, char const* msg,
+    char const* gl_name (GLenum src) {
+      switch (src) {
+        case GL_DEBUG_SOURCE_API:             return "API";
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   return "SYS";
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: return "SHC";
+        case GL_DEBUG_SOURCE_THIRD_PARTY:     return "3PY";
+        case GL_DEBUG_SOURCE_APPLICATION:     return "APP";
+        case GL_DEBUG_SOURCE_OTHER:           return "UNK";
+
+        case GL_DEBUG_TYPE_ERROR:               return "Error";
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: return "Deprecation";
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  return "UB";
+        case GL_DEBUG_TYPE_PORTABILITY:         return "Portability";
+        case GL_DEBUG_TYPE_PERFORMANCE:         return "Performance";
+        case GL_DEBUG_TYPE_MARKER:              return "Annotation";
+        case GL_DEBUG_TYPE_PUSH_GROUP:          return "Push";
+        case GL_DEBUG_TYPE_POP_GROUP:           return "Pop";
+        case GL_DEBUG_TYPE_OTHER:               return "Other";
+
+        case GL_DEBUG_SEVERITY_HIGH:         return "Severe";
+        case GL_DEBUG_SEVERITY_MEDIUM:       return "Moderate";
+        case GL_DEBUG_SEVERITY_LOW:          return "Low";
+        case GL_DEBUG_SEVERITY_NOTIFICATION: return "Info";
+
+        default: return "UNK";
+      }
+    }
+
+    void handle_gl_debug (
+      GLenum src, GLenum type, uint, GLenum level,
+      GLsizei, char const* msg,
       void const*)
     {
-      std::cerr << "GL: " << msg << "\n";
+      std::cerr
+        << "GL: ["
+        << gl_name (src)   << ", "
+        << gl_name (type)  << ", "
+        << gl_name (level) << "]: "
+        << msg << "\n";
     }
     #endif
   }
